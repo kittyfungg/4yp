@@ -7,7 +7,8 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
        
 def pd_one_iteration_batched(bs):
     dims = [2, 2]
-    payout_mat_1 = torch.Tensor([[-1, -3], [0, -2]]).to(device)
+    #/3 to cap reward to 1 for rmax
+    payout_mat_1 = torch.Tensor([[-1/3, -1], [0, -2/3]]).to(device)
     payout_mat_2 = payout_mat_1.T
     #payout_mat_1 = payout_mat_1.reshape((1, 2, 2)).repeat(bs, 1, 1).to(device)
     #payout_mat_2 = payout_mat_2.reshape((1, 2, 2)).repeat(bs, 1, 1).to(device)
