@@ -3,38 +3,11 @@ import os.path as osp
 import gym
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-# def one_iteration_value(self, payout_mat_1, payout_mat_2):
-#     dims = [1, 1]
-#     def Ls(th):
-#         p_1, p_2 = torch.sigmoid(th[0]), torch.sigmoid(th[1])
-#         x, y = torch.cat([p_1, 1-p_1], dim=-1), torch.cat([p_2, 1-p_2], dim=-1)
-#         L_1 = -torch.matmul(torch.matmul(x.unsqueeze(1), payout_mat_1), y.unsqueeze(-1))
-#         L_2 = -torch.matmul(torch.matmul(x.unsqueeze(1), payout_mat_2), y.unsqueeze(-1))
-#         return [L_1.squeeze(-1), L_2.squeeze(-1), None]
-#     return dims, Ls
-
-def ipd_one_iteration_batched(bs, gamma_inner=0.96):
-    dims = [1, 1]
-    payout_mat_1 = torch.Tensor([[-1, -3], [0, -2]]).to(device)
-    payout_mat_2 = payout_mat_1.T
-    payout_mat_1 = payout_mat_1.reshape((1, 2, 2)).repeat(bs, 1, 1).to(device)
-    payout_mat_2 = payout_mat_2.reshape((1, 2, 2)).repeat(bs, 1, 1).to(device)
-
-    def Ls(th):
-        p_1, p_2 = torch.sigmoid(th[0]), torch.sigmoid(th[1])
-        x, y = torch.cat([p_1, 1-p_1], dim=-1), torch.cat([p_2, 1-p_2], dim=-1)
-        L_1 = -torch.matmul(torch.matmul(x, payout_mat_1), y.unsqueeze(-1))
-        L_1 = torch.reshape(L_1, (bs,1,1)) 
-        L_2 = -torch.matmul(torch.matmul(x, payout_mat_2), y.unsqueeze(-1))
-        L_2 = torch.reshape(L_2, (bs,1,1))
-        return [L_1.squeeze(-1), L_2.squeeze(-1), None]
-    return dims, Ls
-
+    
+    
 def get_gradient(function, param):
     grad = torch.autograd.grad(function, param, create_graph=True, allow_unused=True)[0]
     return grad
-
 
 def compute_best_response(outer_th_ba):
     batch_size = 1
@@ -88,8 +61,25 @@ def generate_mamaml(b, d, inner_env, game, inner_lr=1):
         print(total_agent_loss.sum().item())
 
     torch.save((mamaml, alpha), f"mamaml_{game}.th")
+    
+def ipd_one_iteration_batched(bs, gamma_inner=0.96):
+    dims = [1, 1]
+    payout_mat_1 = torch.Tensor([[-1, -3], [0, -2]]).to(device)
+    payout_mat_2 = payout_mat_1.T
+    payout_mat_1 = payout_mat_1.reshape((1, 2, 2)).repeat(bs, 1, 1).to(device)
+    payout_mat_2 = payout_mat_2.reshape((1, 2, 2)).repeat(bs, 1, 1).to(device)
 
-
+    def Ls(th):
+        p_1, p_2 = torch.sigmoid(th[0]), torch.sigmoid(th[1])
+        x, y = torch.cat([p_1, 1-p_1], dim=-1), torch.cat([p_2, 1-p_2], dim=-1)
+        L_1 = -torch.matmul(torch.matmul(x.unsqueeze(1), payout_mat_1), y.unsqueeze(-1))
+        L_1 = torch.reshape(L_1, (bs,1,1)) 
+        L_2 = -torch.matmul(torch.matmul(x.unsqueeze(1), payout_mat_2), y.unsqueeze(-1))
+        L_2 = torch.reshape(L_2, (bs,1,1))
+        return [L_1.squeeze(-1), L_2.squeeze(-1), None]
+    return dims, Ls
+    
+    
 class MetaGames:
     def __init__(self, b, opponent="NL", game="IPD", mmapg_id=0):
         """
@@ -107,22 +97,17 @@ class MetaGames:
         self.action_space = gym.spaces.Tuple([gym.spaces.Discrete(self.num_actions), gym.spaces.Discrete(self.num_actions)])
         self.std = 1
         self.lr = 1
-        self.d = d[0]
+        self.d = d[0]    
 
         self.opponent = opponent
-        if self.opponent == "MAMAML":
-            f = f"data/mamaml_{self.game}_{mmapg_id}.th"
-            assert osp.exists(f), "Generate the MAMAML weights first"
-            self.init_th_ba = torch.load(f)
-        else:
-            self.init_th_ba = None
+        self.init_th_ba = None
             
     def reset(self, info=False):
         if self.init_th_ba is not None:
-            self.inner_th_ba = self.init_th_ba.detach() * torch.ones((self.d), requires_grad=True).to(device)
+            self.inner_th_ba = self.init_th_ba.detach() * torch.ones((self.b, self.d), requires_grad=True).to(device)
         else:
-            self.inner_th_ba = torch.nn.init.normal_(torch.empty((self.d), requires_grad=True), std=self.std).to(device)
-        outer_th_ba = torch.nn.init.normal_(torch.empty((self.d), requires_grad=True), std=self.std).to(device)
+            self.inner_th_ba = torch.nn.init.normal_(torch.empty((self.b, self.d), requires_grad=True), std=self.std).to(device)
+        outer_th_ba = torch.nn.init.normal_(torch.empty((self.b, self.d), requires_grad=True), std=self.std).to(device)
         state, _, _, M = self.step(outer_th_ba)
         if info:
             return state, M
@@ -139,6 +124,3 @@ class MetaGames:
 
         return torch.sigmoid(torch.cat((outer_th_ba, last_inner_th_ba), dim=-1)).detach(), (-l2 * (1 - self.gamma_inner)).detach(), (-l1 * (1 - self.gamma_inner)).detach(), M
        
-    
-    
-    

@@ -48,10 +48,12 @@ class RmaxAgent:
         return action     #returns action of length b
     
     def update(self, memory, best_action, state):
+        
         for i in range(self.b):
+            
             if self.nSA[i][state[i]][best_action] < self.m:
                 self.nSA[i][state[i]][best_action] +=1
-                self.R[i][state[i]][best_action] += reward
+                self.R[i][state[i]][best_action] += memory.rewards[-1]
                 self.nSAS[i][state[i]][best_action][new_obs] += 1
 
                 if self.nSA[i][state[i]][best_action] == self.m:
@@ -79,7 +81,7 @@ class RmaxAgent:
                                     #print(q + self.gamma*(self.R[state][action]/self.nSA[state][action]))
                                     #In the cited paper it is given that reward[s,a]= summation of rewards / nSA[s,a]
                                     #We have already calculated the summation of rewards in line 28
-
+            
             memory.state = new_state  
 
     def mean_rewards_per_500(self):
@@ -96,5 +98,7 @@ class RmaxAgent:
                     state = env.reset()
                     break
         return (total_reward/500) 
+    
+    
 
     
