@@ -8,10 +8,8 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def pd_one_iteration_batched(bs):
     dims = [2, 2]
     #/3 to cap reward to 1 for rmax
-    payout_mat_1 = torch.Tensor([[-1/3, -1], [0, -2/3]]).to(device)
+    payout_mat_1 = torch.Tensor([[1/3, 1], [0, 2/3]]).to(device)
     payout_mat_2 = payout_mat_1.T
-    #payout_mat_1 = payout_mat_1.reshape((1, 2, 2)).repeat(bs, 1, 1).to(device)
-    #payout_mat_2 = payout_mat_2.reshape((1, 2, 2)).repeat(bs, 1, 1).to(device)
 
     def Ls(action):
         loss1 = torch.empty(bs).to(device)
@@ -20,11 +18,11 @@ def pd_one_iteration_batched(bs):
         for i in range(bs):
             x = torch.stack((action[0,i], (1-action[0,i])), dim=-1)
             y = torch.stack((action[1,i], (1-action[1,i])), dim=-1)
-            L_1 = -torch.matmul(torch.matmul(x, payout_mat_1), y)
-            L_2 = -torch.matmul(torch.matmul(x, payout_mat_2), y)
+            L_1 = torch.matmul(torch.matmul(x, payout_mat_1), y)
+            L_2 = torch.matmul(torch.matmul(x, payout_mat_2), y)
             loss1[i] = L_1
             loss2[i] = L_2
-        return [L_1.squeeze(-1), L_2.squeeze(-1)]
+        return [loss1, loss2]
     return dims, Ls
 
 class MetaGames:
@@ -50,12 +48,16 @@ class MetaGames:
         #reward table with discretized dimensions, (batch_size, states, actions, agents)
         self.innerr = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device) 
         #states = 4 for IPD (CC,CD,DC,DD) and actions = 2 (C,D)
-        self.innerq = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device)      
+        self.innerq = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device)     
+        #inner visitation freq
+        #self.innernSA = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device) 
+        #self.innernSAS = torch.zeros(self.b, self.num_actions**2 , self.num_actions, self.num_actions**2, 2).to(device) 
             
     def reset(self, info=False):
-        rand_action = torch.randint(2, (self.d, self.b)).to(device)        #random action of size [size.d, size.b], action value either 0 (Coorperate) or 1(Defect)
-
+        #random action of size [size.d, size.b], action value either 0 (Coorperate) or 1(Defect)
+        rand_action = torch.randint(2, (self.d, self.b)).to(device)        
         state, _, _ = self.step(rand_action)
+        self.innerr = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device) 
         return state
 
 
@@ -72,7 +74,7 @@ class MetaGames:
             elif action[:,i].tolist() == [1,1]:   #DD
                 state[i] = 3
 
-        return state.detach(), -l2.detach(), -l1.detach()
+        return state.detach(), l1.detach(), l2.detach()
     
     def choose_action(self, state):
     #chooses action that corresponds to the max Q value of the particular agent

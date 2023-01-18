@@ -30,7 +30,7 @@ class RmaxAgent:
         #self.Q = torch.ones(((10**(radius_dp)+1) * 2, env.num_actions)).mul(R_max / (1 - self.gamma)).to(device)   
         self.Q = torch.ones(self.b, ((10**(radius_dp)+1) * env.num_actions * 2), ((10**(radius_dp)+1) * env.num_actions)).mul(R_max / (1 - self.gamma)).to(device) 
         #self.R = torch.zeros(((10**(radius_dp)+1) * 2, env.num_actions)).to(device)  
-        self.R = torch.zeros(self.b, ((10**(radius_dp)+1) * env.num_actions * 2), ((10**(radius_dp)+1) * env.num_actions)).to(device)
+        self.R = torch.ones(self.b, ((10**(radius_dp)+1) * env.num_actions * 2), ((10**(radius_dp)+1) * env.num_actions)).to(device)
         
         self.nSA = torch.zeros(self.b, ((10**(radius_dp)+1) * env.num_actions * 2), ((10**(radius_dp)+1) * env.num_actions)).to(device)
         
