@@ -13,18 +13,13 @@ def pd_one_iteration_batched(bs):
     rew1 = torch.empty(bs).to(device)
     rew2 = torch.empty(bs).to(device)
     
-    def Reward(action, t):
+    def Reward(action):
         for i in range(bs):
-            if t == 0:
-                x0 = torch.stack((action[0,i], 1-action[0,i]), dim=0)    #action of our agent [1, 0] for C
-                y0 = torch.stack((action[1,i], 1-action[1,i]), dim=0)    #action of other agent 
-                rew1[i] = torch.matmul(torch.matmul(x0, payout_mat_1), y0.unsqueeze(-1))
-                rew2[i] = torch.matmul(torch.matmul(x0, payout_mat_2), y0.unsqueeze(-1))
-            else:
-                x = torch.stack((action[0,i], 1-action[0,i]), dim=0)    #[our agent, updated action, batch]
-                y = torch.stack((action[1,i], 1-action[1,i]), dim=0)
-                rew1[i] += torch.matmul(torch.matmul(x, payout_mat_1), y.unsqueeze(-1)).squeeze(-1)
-                rew2[i] += torch.matmul(torch.matmul(x, payout_mat_2), y.unsqueeze(-1)).squeeze(-1)
+            x = torch.stack((action[0,i], 1-action[0,i]), dim=0)    #[our agent, updated action, batch]
+            y = torch.stack((action[1,i], 1-action[1,i]), dim=0)
+            rew1[i] = torch.matmul(torch.matmul(x, payout_mat_1), y.unsqueeze(-1)).squeeze(-1)
+            rew2[i] = torch.matmul(torch.matmul(x, payout_mat_2), y.unsqueeze(-1)).squeeze(-1)
+
         return [rew1, rew2]
     
     return dims, Reward
@@ -47,7 +42,7 @@ class MetaGames:
         self.d = d[0]    
         self.num_actions = d[1]
         self.num_agents = 2
-
+        
         self.rew1 = torch.empty(b).to(device)
         self.rew2 = torch.empty(b).to(device)
         
@@ -58,12 +53,12 @@ class MetaGames:
     def reset(self, info=False):
         #random action of size [2 agents, size.b], action value either 1 (Coorperate) or 0 (Defect)
         self.init_action = torch.randint(2, (self.num_agents, self.b)).to(device)
-        state, _, _ = self.step(self.init_action, 0)
+        state, _, _ = self.step(self.init_action)
         self.innerr = torch.zeros(self.b, self.d , self.num_actions, self.num_agents).to(device) 
         return state
 
-    def step(self, action, t):
-        r1, r2 = self.game_batched(action.float(), t)
+    def step(self, action):
+        r1, r2 = self.game_batched(action.float())
         self.rew1 = r1
         self.rew2 = r2
         state = torch.empty(self.num_agents, self.b, dtype = torch.long).to(device)
