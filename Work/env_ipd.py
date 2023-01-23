@@ -6,24 +6,28 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
        
 def pd_one_iteration_batched(bs):
-    dims = [2, 2]
-    #/3 to cap reward to 1 for rmax
-    payout_mat_1 = torch.Tensor([[1/3, 1], [0, 2/3]]).to(device)
+    dims = [5, 2]
+    #/5 to cap reward to 1 for rmax
+    payout_mat_1 = torch.Tensor([[3/5, 0], [1, 1/5]]).to(device)
     payout_mat_2 = payout_mat_1.T
-
-    def Ls(action):
-        loss1 = torch.empty(bs).to(device)
-        loss2 = torch.empty(bs).to(device)
-        
+    rew1 = torch.empty(bs).to(device)
+    rew2 = torch.empty(bs).to(device)
+    
+    def Reward(action, t):
         for i in range(bs):
-            x = torch.stack((action[0,i], (1-action[0,i])), dim=-1)
-            y = torch.stack((action[1,i], (1-action[1,i])), dim=-1)
-            L_1 = torch.matmul(torch.matmul(x, payout_mat_1), y)
-            L_2 = torch.matmul(torch.matmul(x, payout_mat_2), y)
-            loss1[i] = L_1
-            loss2[i] = L_2
-        return [loss1, loss2]
-    return dims, Ls
+            if t == 0:
+                x0 = torch.stack((action[0,i], 1-action[0,i]), dim=0)    #action of our agent [1, 0] for C
+                y0 = torch.stack((action[1,i], 1-action[1,i]), dim=0)    #action of other agent 
+                rew1[i] = torch.matmul(torch.matmul(x0, payout_mat_1), y0.unsqueeze(-1))
+                rew2[i] = torch.matmul(torch.matmul(x0, payout_mat_2), y0.unsqueeze(-1))
+            else:
+                x = torch.stack((action[0,i], 1-action[0,i]), dim=0)    #[our agent, updated action, batch]
+                y = torch.stack((action[1,i], 1-action[1,i]), dim=0)
+                rew1[i] += torch.matmul(torch.matmul(x, payout_mat_1), y.unsqueeze(-1)).squeeze(-1)
+                rew2[i] += torch.matmul(torch.matmul(x, payout_mat_2), y.unsqueeze(-1)).squeeze(-1)
+        return [rew1, rew2]
+    
+    return dims, Reward
 
 class MetaGames:
     def __init__(self, b, opponent="NL", game="IPD"):
@@ -36,51 +40,55 @@ class MetaGames:
         """
         self.gamma_inner = 0.96
         self.b = b
-        self.num_actions = 2
-
+        
         d, self.game_batched = pd_one_iteration_batched(b)
-        self.action_space = gym.spaces.Tuple([gym.spaces.Discrete(self.num_actions), gym.spaces.Discrete(self.num_actions)])
         self.std = 1
         self.lr = 1
         self.d = d[0]    
+        self.num_actions = d[1]
+        self.num_agents = 2
 
-        self.opponent = opponent
+        self.rew1 = torch.empty(b).to(device)
+        self.rew2 = torch.empty(b).to(device)
+        
         #reward table with discretized dimensions, (batch_size, states, actions, agents)
-        self.innerr = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device) 
-        #states = 4 for IPD (CC,CD,DC,DD) and actions = 2 (C,D)
-        self.innerq = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device)     
-        #inner visitation freq
-        #self.innernSA = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device) 
-        #self.innernSAS = torch.zeros(self.b, self.num_actions**2 , self.num_actions, self.num_actions**2, 2).to(device) 
-            
+        self.innerr = torch.zeros(self.b, self.d , self.num_actions, self.num_agents).to(device) 
+        self.innerq = torch.zeros(self.b, self.d , self.num_actions, self.num_agents).to(device)     
+
     def reset(self, info=False):
-        #random action of size [size.d, size.b], action value either 0 (Coorperate) or 1(Defect)
-        rand_action = torch.randint(2, (self.d, self.b)).to(device)        
-        state, _, _ = self.step(rand_action)
-        self.innerr = torch.zeros(self.b, self.num_actions**2 , self.num_actions, 2).to(device) 
+        #random action of size [2 agents, size.b], action value either 1 (Coorperate) or 0 (Defect)
+        self.init_action = torch.randint(2, (self.num_agents, self.b)).to(device)
+        state, _, _ = self.step(self.init_action, 0)
+        self.innerr = torch.zeros(self.b, self.d , self.num_actions, self.num_agents).to(device) 
         return state
 
-
-    def step(self, action):
-        l1, l2 = self.game_batched(action.float())
-        state = torch.empty(self.b, dtype = torch.long).to(device)
+    def step(self, action, t):
+        r1, r2 = self.game_batched(action.float(), t)
+        self.rew1 = r1
+        self.rew2 = r2
+        state = torch.empty(self.num_agents, self.b, dtype = torch.long).to(device)
         for i in range(self.b):
-            if action[:,i].tolist() == [0,0]:     #CC
-                state[i] = 0
-            elif action[:,i].tolist() == [0,1]:   #CD
-                state[i] = 1
-            elif action[:,i].tolist() == [1,0]:   #DC
-                state[i] = 2
-            elif action[:,i].tolist() == [1,1]:   #DD
-                state[i] = 3
+            #if our agent's new action
+            if action[:,i].tolist() == [1,1]:     #CC
+                state[:,i] = 1
+            elif action[:,i].tolist() == [1,0]:   #CD
+                state[0,i] = 2
+                state[1,i] = 3
+            elif action[:,i].tolist() == [0,1]:   #DC
+                state[0,i] = 3
+                state[1,i] = 2
+            elif action[:,i].tolist() == [0,0]:   #DD
+                state[:,i] = 4
 
-        return state.detach(), l1.detach(), l2.detach()
+        return state.detach(), r1.detach(), r2.detach()
     
     def choose_action(self, state):
     #chooses action that corresponds to the max Q value of the particular agent
-        best_action = torch.empty((self.d, self.b), dtype = torch.int64).to(device)
+        best_action = torch.empty((self.num_agents, self.b), dtype = torch.int64).to(device)
+        
         for i in range(self.b):
-            best_action[:,i] = torch.argmax(self.innerq[i, state[i], :, :], dim=-2)
+            best_action[0,i] = torch.argmax(self.innerq[i, state[0,i], :, 0])
+            best_action[1,i] = torch.argmax(self.innerq[i, state[1,i], :, 1])
         return best_action.detach()
             
        
