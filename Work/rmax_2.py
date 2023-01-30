@@ -25,21 +25,25 @@ class Memory:
         del self.rewards[:]
         
 class RmaxAgent:
-    def __init__(self, env, R_max, gamma, max_episodes, max_steps, radius, epsilon = 0.2):
+    def __init__(self, env, R_max, gamma, max_inner_epi, max_inner_steps, radius, epsilon = 0.2):
         self.gamma = gamma
         self.epsilon = epsilon
-        self.radius = radius               #added decimal place for Q & R matrix dimension
-        self.max_steps = max_steps
-        self.max_episodes = max_episodes
+        self.max_inner_epi = max_inner_epi
+        self.max_inner_steps = max_inner_steps
         self.b = env.b
-        #no of possible combinations for a inner Q value
-        self.poss_combo = math.ceil((1/(1-gamma)) / radius) + 1
-        self.meta_size = self.poss_combo ** (env.d * env.num_actions)
+    
+        #no of possible combinations for meta-s 
+        self.poss_combo_s = (env.d -1) * env.num_agents * (env.num_actions * 4)    #4 for number of rewards
+        self.meta_S_size = self.poss_combo_s ** (self.max_inner_epi * self.max_inner_steps * self.b)
+        
+        #no of possible combinations for meta-a 
+        self.meta_A_size = env.d ** env.num_actions     #5^2
+        
         #Q for meta-game, *2 for 2 player  
-        self.Q = torch.ones(self.b, self.meta_size * 2, self.meta_size).mul(R_max / (1 - self.gamma)).to(device) 
-        self.R = torch.ones(self.b, self.meta_size * 2, self.meta_size).to(device)
-        self.nSA = torch.zeros(self.b, self.meta_size * 2, self.meta_size).to(device)
-        self.nSAS = torch.ones(self.b, self.meta_size * 2, self.meta_size, self.meta_size * 2).to(device)
+        self.Q = torch.ones(self.b, self.meta_S_size , self.meta_A_size).mul(R_max / (1 - self.gamma)).to(device) 
+        self.R = torch.ones(self.b, self.meta_S_size , self.meta_A_size).to(device)
+        self.nSA = torch.zeros(self.b, self.meta_S_size , self.meta_A_size).to(device)
+        self.nSAS = torch.ones(self.b, self.meta_S_size , self.meta_A_size, self.meta_S_size).to(device)
         
         self.val1 = []
         self.val2 = []  #This is for keeping track of rewards over time and for plotting purposes  
