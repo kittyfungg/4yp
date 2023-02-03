@@ -4,12 +4,12 @@ import numpy as np
 import torch
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def find_meta_index(meta, poss_combo):
+def find_meta_index(meta, radius, poss_combo):
     index = int(0) #initialise index
 
     #for every digit in metastate/ metaaction:
     for i in range(list(meta.size())[0]):
-        index += meta[i] * (poss_combo ** i)
+        index += (meta[i]//radius) * (poss_combo ** i)
         
     return int(index.item())
 
@@ -33,10 +33,10 @@ class RmaxAgent:
         self.b = env.b
        
         #no of possible combinations for a inner Q value
-        self.poss_combo = math.ceil((1/(1-inner_gamma)) / radius) 
-        self.meta_size = self.poss_combo ** (env.d * env.num_actions * env.num_agents)
+        self.poss_combo = math.ceil((1//(1-inner_gamma)) / radius) +1
+        self.meta_size = self.poss_combo ** (env.d * env.num_actions)
         
-        #Q for meta-game, *2 for 2 player  
+        #Q = [batch, meta_state, meta_action, *2 for 2 player  
         self.Q = torch.ones(self.b, self.meta_size * 2, self.meta_size).mul(R_max / (1 - self.meta_gamma)).to(device) 
         self.R = torch.ones(self.b, self.meta_size * 2, self.meta_size).to(device)
         self.nSA = torch.zeros(self.b, self.meta_size * 2, self.meta_size).to(device)
@@ -46,19 +46,19 @@ class RmaxAgent:
         self.val2 = []  #This is for keeping track of rewards over time and for plotting purposes  
         self.m = int(math.ceil(math.log(1 / (self.epsilon * (1-self.meta_gamma))) / (1-self.meta_gamma)))   #calculate m number
         
-    def select_action(self, state):
-        if np.random.random() > (1-self.epsilon):
-            action = env.action_space.sample()
-        else:
-            action = torch.amax(self.Q[:,state,:], 2)
+    def select_action(self, env, state):
+        #if np.random.random() > (1-self.epsilon):
+        #    action = env.action_space.sample()
+        #else:
+        action = torch.argmax(self.Q[:,find_meta_index(torch.flatten(state), self.radius, self.poss_combo),:], 1)    #find maximum from the third dimension(action dimension)
         return action     #returns action of length b
     
     def update(self, env, memory, state, action, next_state):
         #for each batch
         for batch in range(self.b):
-            action_mapped = find_meta_index( torch.flatten( action[batch] ), self.poss_combo)
-            state_mapped = find_meta_index( torch.flatten( state[batch] ), self.poss_combo)
-            next_state_mapped = find_meta_index( torch.flatten( next_state[batch] ), self.poss_combo)
+            action_mapped = find_meta_index( torch.flatten( action[batch] ), self.radius, self.poss_combo)
+            state_mapped = find_meta_index( torch.flatten( state[batch] ), self.radius, self.poss_combo)
+            next_state_mapped = find_meta_index( torch.flatten( next_state[batch] ), self.radius, self.poss_combo)
 
             if self.nSA[batch][state_mapped][action_mapped] < self.m:
                 
@@ -85,4 +85,6 @@ class RmaxAgent:
 
                                     self.Q[batch][s][a] = q 
                                     #We have already calculated the summation of rewards in line 28
+\
+
         

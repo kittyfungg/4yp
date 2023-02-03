@@ -4,15 +4,6 @@ import numpy as np
 import torch
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def find_meta_index(meta, radius, gamma):
-    index = int(0) #initialise index
-
-    #for every digit in metastate/ metaaction:
-    for i in range(list(meta.size())[0]):
-        index += meta[i] * ((math.ceil((1/(1-gamma)) / radius) + 1 )**i)
-        
-    return int(index.item())
-
 class Memory:
     def __init__(self):
         self.actions = []
@@ -56,6 +47,15 @@ class RmaxAgent:
             action = torch.amax(self.Q[:,state,:], 2)
         return action     #returns action of length b
     
+    def find_meta_index(meta):
+        index = int(0) #initialise index
+
+        #for every digit in metastate/ metaaction:
+        for i in range(list(meta.size())[0]):
+            index += meta[i] * ((math.ceil((1/(1-self.gamma)) / self.radius) + 1 )**i)
+
+        return int(index.item())
+
     def update(self, memory, state, action, next_state):
         #for each batch
         for i in range(self.b):
