@@ -21,20 +21,19 @@ class RmaxAgent:
         self.epsilon = epsilon
         self.max_inner_epi = max_inner_epi
         self.max_inner_steps = max_inner_steps
-        self.b = env.b
     
         #no of possible combinations for meta-s 
         self.poss_combo_s = (env.d -1) * env.num_agents * (env.num_actions * 4)    #4 for number of rewards
-        self.meta_S_size = self.poss_combo_s ** (self.max_inner_epi * self.max_inner_steps * self.b)
+        self.meta_S_size = self.poss_combo_s ** (self.max_inner_epi * self.max_inner_steps)
         
         #no of possible combinations for meta-a 
         self.meta_A_size = env.d ** env.num_actions     #5^2
         
         #Q for meta-game, *2 for 2 player  
-        self.Q = torch.ones(self.b, self.meta_S_size , self.meta_A_size).mul(R_max / (1 - self.gamma)).to(device) 
-        self.R = torch.ones(self.b, self.meta_S_size , self.meta_A_size).to(device)
-        self.nSA = torch.zeros(self.b, self.meta_S_size , self.meta_A_size).to(device)
-        self.nSAS = torch.ones(self.b, self.meta_S_size , self.meta_A_size, self.meta_S_size).to(device)
+        self.Q = torch.ones(self.meta_S_size , self.meta_A_size).mul(R_max / (1 - self.gamma)).to(device) 
+        self.R = torch.ones(self.meta_S_size , self.meta_A_size).to(device)
+        self.nSA = torch.zeros(self.meta_S_size , self.meta_A_size).to(device)
+        self.nSAS = torch.ones(self.meta_S_size , self.meta_A_size, self.meta_S_size).to(device)
         
         self.val1 = []
         self.val2 = []  #This is for keeping track of rewards over time and for plotting purposes  
@@ -56,36 +55,33 @@ class RmaxAgent:
 
         return int(index.item())
 
-    def update(self, memory, state, action, next_state):
-        #for each batch
-        for i in range(self.b):
-            action_mapped = find_meta_index(torch.flatten(action[i]), self.radius, self.gamma)
-            state_mapped = find_meta_index(torch.flatten(state[i]), self.radius, self.gamma)
-            next_state_mapped = find_meta_index(torch.flatten(next_state[i]), self.radius, self.gamma)
+    def update(self, env, memory, state, action, next_state):
+        action_mapped = self.find_meta_index( torch.flatten(action))
+        state_mapped = self.find_meta_index( torch.flatten(state))
+        next_state_mapped = self.find_meta_index( torch.flatten(next_state))
 
-            if self.nSA[i][state_mapped][action_mapped] < self.m:
-                
-                self.nSA[i][state_mapped][action_mapped] += 1
-                self.R[i][state_mapped][action_mapped] += memory.rewards[-1][i]
-                self.nSAS[i][state_mapped][action_mapped][next_state_mapped] += 1
+        if self.nSA[state_mapped][action_mapped] < self.m:
 
-                if self.nSA[i][state_mapped][action_mapped] == self.m:
+            self.nSA[state_mapped][action_mapped] += 1
+            self.R[state_mapped][action_mapped] += memory.rewards[-1]
+            self.nSAS[state_mapped][action_mapped][next_state_mapped] += 1
 
-                    for i in range(mnumber):
+            if self.nSA[state_mapped][action_mapped] == self.m:
 
-                        for s in range(self.poss_combo * 2):
+                for i in range(self.m):
 
-                            for a in range(self.poss_combo):
+                    for s in range(self.meta_size * 2):
 
-                                if self.nSA[i][s][a] >= self.m:
+                        for a in range(self.meta_size):
 
-                                    #We have already calculated the summation of rewards in line 28
-                                    q = (self.R[i][s][a]/self.nSA[i][s][a])
+                            if self.nSA[s][a] >= self.m:
 
-                                    for next_state in range(env.d * 2):
-                                        transition = self.nSAS[i][s][a][next_state]/self.nSA[i][s][a]
-                                        q += (transition * torch.max(self.Q[i,next_state,:]))
+                                #We have already calculated the summation of rewards in line 28
+                                q = (self.R[s][a]/self.nSA[s][a])
 
-                                    self.Q[i][s][a] = q 
-                                    #We have already calculated the summation of rewards in line 28
-        
+                                for next_s in range(env.d * 2):
+                                    transition = self.nSAS[s][a][next_s]/self.nSA[s][a]
+                                    q += (transition * torch.max(self.Q[next_s,:]))
+
+                                self.Q[s][a] = q 
+                                #We have already calculated the summation of rewards in line 28
