@@ -22,7 +22,6 @@ class RmaxAgent:
         self.inner_gamma = inner_gamma
         self.epsilon = epsilon
         self.radius = radius               #added decimal place for Q & R matrix dimension
-        #self.action_space = []
        
         #no of possible combinations for an inner Q value
         self.poss_combo = math.ceil((1//(1-inner_gamma)) / radius) +1
@@ -34,8 +33,6 @@ class RmaxAgent:
         self.nSA = torch.zeros(self.meta_size ** 2, self.meta_size).to(device)
         self.nSAS = torch.ones(self.meta_size ** 2, self.meta_size, self.meta_size ** 2).to(device)
     
-        self.val1 = []
-        self.val2 = []  #This is for keeping track of rewards over time and for plotting purposes  
         self.m = int(math.ceil(math.log(1 / (self.epsilon * (1-self.meta_gamma))) / (1-self.meta_gamma)))   #calculate m number
         
     def select_action(self, env, state):

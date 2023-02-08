@@ -23,22 +23,18 @@ class RmaxAgent:
         self.epsilon = epsilon
         self.radius = radius               #added decimal place for Q & R matrix dimension
         self.Rmax = R_max
-        self.Q0 = self.Rmax / (1 - self.meta_gamma)
+        self.Q0 = round(self.Rmax / (1 - self.meta_gamma), 2)
+        
         #no of possible combinations for an inner Q value
         self.poss_combo = math.ceil((1//(1-inner_gamma)) / radius) +1
         self.meta_size = self.poss_combo ** (env.d * env.num_actions)
         
         #Initialise dictionary with key names & null values
-        s_a_key = {"state", "action"}
-        s_a_s_key = {"state", "action", "next_state"}  
-
         self.Q = {"Qval": [self.Q0], "action": [0], "state":[0]}
         self.R = {"Rval": [self.Rmax], "action": [0], "state":[0]}
         self.nSA = {"nval": [0], "action": [0], "state":[0]}
-        self.nSAS = {"nvals": [self.Q0], "next_state":[0], "action": [0], "state":[0]}
+        self.nSAS = {"nvals": [0], "next_state":[0], "action": [0], "state":[0]}
     
-        self.val1 = []
-        self.val2 = []  #This is for keeping track of rewards over time and for plotting purposes  
         self.m = int(math.ceil(math.log(1 / (self.epsilon * (1-self.meta_gamma))) / (1-self.meta_gamma)))   #calculate m number
         
     def select_action(self, env, state):
@@ -49,7 +45,7 @@ class RmaxAgent:
             poss_indices = [i for i,x in enumerate(len(self.nSA.get("nval"))) if self.nSA.get("state") == self.find_meta_index(torch.flatten(state), self.radius, self.poss_combo)]
             
             #find action that corresponds to max. Q value
-            action = torch.argmax([self.Q.get("Qval")[i] for i in poss_indices])     
+            action = torch.argmax([self.Q["Qval"][i] for i in poss_indices])     
         return action     #returns action index
     
     def find_meta_index(self, meta):
@@ -68,6 +64,7 @@ class RmaxAgent:
             state_locations = [i for i,x in enumerate(state_arr) if x==pair[0]]
             action_locatons = [i for i,x in enumerate(action_arr) if x==pair[1]]
             return list(set(state_locations) & set(action_locatons))
+        
         else:                 #if [state,action,next_state] pair
             state_arr = dictionary["state"]
             action_arr = dictionary["action"]
@@ -92,7 +89,7 @@ class RmaxAgent:
                 mod = 0
                 reconstruct[i] = 0
         
-        return torch.reshape(reconstruct, (agent_size, env.num_actions))
+        return torch.reshape(reconstruct, (agent_size, env.num_actions)).to(device)
 
     def update(self, env, memory, state, action, next_state):
         state_mapped = self.find_meta_index( torch.flatten(state))
@@ -101,23 +98,53 @@ class RmaxAgent:
         
         pair_index = self.find_pair_index([state_mapped, action_mapped], self.nSA)
         pairs_index = self.find_pair_index([state_mapped, action_mapped, next_state_mapped], self.nSAS)
-                                          
-        if self.nSA[state_mapped][action_mapped] < self.m:
+        
+        #if s-a pair hasn't been visited before (thus not in dictionary)
+        if len(pair_index) <= 1:
             #update nSA dictionary 
-            self.nSA.get("state").append(state_mapped)
-            self.nSA.get("action").append(action_mapped)
-            self.nSA.get("nval").append(self.nSA.get("nval")[pair_index] + 1)
+            self.nSA["state"].append(state_mapped)
+            self.nSA["action"].append(action_mapped)
+            self.nSA["nval"].append(1)
+                
             #update R dictionary          
-            self.R.get("state").append(state_mapped)
-            self.R.get("action").append(action_mapped)
-            self.R.get("Rval").append(self.R.get("Rval")[pair_index] + memory.rewards[-1])  
+            self.R["state"].append(state_mapped)
+            self.R["action"].append(action_mapped)
+            self.R["Rval"].append(1)
+            
             #update nSAS dictionary
-            self.nSAS.get("state").append(state_mapped)
-            self.nSAS.get("action").append(action_mapped)
-            self.nSAS.get("next_state").append(next_state_mapped)
-            self.nSAS.get("nvals").append(self.nSAS.get("nvals")[pairs_index] + 1)
+            self.nSAS["state"].append(state_mapped)
+            self.nSAS["action"].append(action_mapped)
+            self.nSAS["next_state"].append(next_state_mapped)
+            self.nSAS["nvals"].append(1)
 
-            if self.nSA.get("nval")[pair_index] == self.m:
+            #update Q dicitonary
+            self.Q["state"].append(state_mapped)
+            self.Q["action"].append(action_mapped)
+            self.Q["Qval"].append(self.Q0)
+        
+        #else if visitation frequency < m number 
+        elif self.nSA["nval"][pair_index[-1]] < self.m:
+            #update nSA dictionary 
+            self.nSA["state"].append(state_mapped)
+            self.nSA["action"].append(action_mapped)
+            self.nSA["nval"].append(self.nSA["nval"][pair_index[-1]] + 1)
+                
+            #update R dictionary          
+            self.R["state"].append(state_mapped)
+            self.R["action"].append(action_mapped)
+            self.R["Rval"].append(memory.rewards[-1])
+            
+            #update nSAS dictionary
+            self.nSAS["state"].append(state_mapped)
+            self.nSAS["action"].append(action_mapped)
+            self.nSAS["next_state"].append(next_state_mapped)
+            if len(pairs_index) == 0:     #if s-a-s pair hasn't been visited before
+                self.nSAS["nvals"].append(1)
+            else:                         #else +=1
+                self.nSAS["nvals"].append(self.nSAS["nvals"][pairs_index[-1]] + 1)
+
+            if self.nSA["nval"][pair_index[-1]] == self.m:
+                print("hit m")
 
                 for mval in range(self.m):
 
@@ -125,32 +152,27 @@ class RmaxAgent:
 
                         for a in range(self.meta_size):
                             #find indices that have been visited for at least m times
-                            bigger_m_ind = [i for i,x in enumerate(len(self.nSA.get("nval"))) if x >= self.m]
+                            bigger_m_ind = [i for i,x in enumerate(len(self.nSA["nval"])) if x >= self.m]
                             
                             for ind in bigger_m_ind:   
-                                q = (self.R.get("Rval")[ind] / self.nSA.get("nval")[ind])
+                                q = (self.R["Rval"][ind] / self.nSA["nval"][ind])
 
                                 for next_s in range(env.d * 2):
-                                    transition = self.nSAS.get("nvals")[ind] / self.nSA.get("nval")[ind]
+                                    transition = self.nSAS["nvals"][ind] / self.nSA["nval"][ind]
                                     #find state indices that corresponds to next_s
-                                    stateind_arr = [i for i,x in enumerate(self.nSA.get("states")) if x == next_s]
+                                    stateind_arr = [i for i,x in enumerate(self.nSA["states"]) if x == next_s]
                                     
                                     #if there are Q values that are larger than R_max / (1 - meta_gamma)
-                                    if np.max([self.Q.get("Qval")[states] for states in range(stateind_arr)]) > self.Q0:
-                                        q += transition * np.max([self.Q.get("Qval")[states] for states in range(stateind_arr)])
+                                    if np.max([self.Q["Qval"][states] for states in range(stateind_arr)]) > self.Q0:
+                                        q += transition * np.max([self.Q["Qval"][states] for states in range(stateind_arr)])
                                     #else we use the explore Q value
                                     else:
                                         q += self.Q0
                                         
                                 #update Q dicitonary
                                 Q_pair_index = self.find_pair_index([s, a], self.nSA)  
-                                self.Q.get("state").append(s)
-                                self.Q.get("action").append(a)
-                                self.Q.get("Qval")[Q_pair_index] = q 
+                                self.Q["state"].append(s)
+                                self.Q["action"].append(a)
+                                self.Q["Qval"][Q_pair_index] = q 
                                 
-            else:
-                #update Q dicitonary
-                self.Q.get("state").append(s)
-                self.Q.get("action").append(a)
-                self.Q.get("Qval")[pair_index] = self.Q0
 

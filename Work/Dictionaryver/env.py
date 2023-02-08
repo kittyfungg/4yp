@@ -6,37 +6,49 @@ from gym.spaces import Discrete, Tuple
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
 def mp_one_iteration():
     dims = [1, 2]
-    #/5 to cap reward to 1 for rmax
-    payout_mat_1 = torch.Tensor([[1, 0], [0, 1]]).to(device)    #changed -1 entries to 0 since cant negative-index
+    #changed -1 entries to 0 since cant negative-index
+    payout_mat_1 = torch.Tensor([[1, 0], [0, 1]]).to(device)   
     payout_mat_2 = torch.Tensor([[0, 1], [1, 0]]).to(device)
     rew1 = 0
     rew2 = 0
     
     def Reward(action):
-        x = torch.stack((action[0], 1-action[0]), dim=0)    #[our agent, updated action, batch]
+        x = torch.stack((action[0], 1-action[0]), dim=0)    #[our agent, updated action]
         y = torch.stack((action[1], 1-action[1]), dim=0)
         rew1= torch.matmul(torch.matmul(x, payout_mat_1), y.unsqueeze(-1)).squeeze(-1).detach().clone()
         rew2= torch.matmul(torch.matmul(x, payout_mat_2), y.unsqueeze(-1)).squeeze(-1).detach().clone()
+        return [rew1, rew2]
+    
+    return dims, Reward
 
+def pd_one_iteration():
+    dims = [5, 2]
+    #/5 to cap reward to 1 for rmax
+    payout_mat_1 = torch.Tensor([[3/5, 0], [1, 1/5]]).to(device)
+    payout_mat_2 = payout_mat_1.T
+    rew1 = 0
+    rew2 = 0
+    
+    def Reward(action):
+        x = torch.stack((action[0], 1-action[0]), dim=0)    #[our agent, updated action]
+        y = torch.stack((action[1], 1-action[1]), dim=0)
+        rew1= torch.matmul(torch.matmul(x, payout_mat_1), y.unsqueeze(-1)).squeeze(-1).detach().clone()
+        rew2= torch.matmul(torch.matmul(x, payout_mat_2), y.unsqueeze(-1)).squeeze(-1).detach().clone()
         return [rew1, rew2]
     
     return dims, Reward
 
 class MetaGames:
-    def __init__(self, opponent="NL", game="IPD"):
-        """
-        Opponent can be:
-        NL = Naive Learner (gradient updates through environment).
-        LOLA = Gradient through NL.
-        STATIC = Doesn't learn.
-        COPYCAT = Copies what opponent played last step.
-        """
+    def __init__(self, game):
         self.gamma_inner = 0.96
         
-        d, self.game= mp_one_iteration()
+        if game == "PD":
+            d, self.game= pd_one_iteration()
+        elif game == "MP":
+            d, self.game= mp_one_iteration()
+            
         self.epsilon = 0.8
         self.lr = 1
         self.d = d[0]    

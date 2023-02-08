@@ -6,7 +6,6 @@ from gym.spaces import Discrete, Tuple
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
 def mp_one_iteration():
     dims = [1, 2]
     #/5 to cap reward to 1 for rmax
