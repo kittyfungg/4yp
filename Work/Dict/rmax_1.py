@@ -4,7 +4,6 @@ import numpy as np
 import torch
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
 class Memory:
     def __init__(self):
         self.actions = []
@@ -51,7 +50,7 @@ class RmaxAgent:
     def find_meta_index(self, meta):
         index = int(0) #initialise index
 
-        #for every digit in metastate/ metaaction:
+        #for every digit in meta-state/ meta-action:
         for i in range(list(meta.size())[0]):
             index += (meta[i]//self.radius) * (self.poss_combo ** i)
         return int(index)
@@ -74,14 +73,14 @@ class RmaxAgent:
             next_state_locations = [i for i,x in enumerate(state_arr) if x==pair[2]]
             return list(set(state_locations) & set(action_locatons) & set(next_state_locations))
 
-    def index_to_table(self, env, index, agent_size) :
-        #returns a table of size [agent, num_actions], given index
+    def index_to_table(self, env, index, size) :
+        #returns a table of size [size, num_states, num_actions], given index
         #agent_size either 1/2, 1 for action table, 2 for state table
-        maxi = agent_size * env.num_actions 
-        reconstruct = torch.empty(maxi)
-        for i in reversed(range(maxi)):
-            if index >= self.poss_combo**i:
-                q, mod = divmod(index, self.poss_combo**i)
+        Q_size = size * env.d * env.num_actions 
+        reconstruct = torch.empty(Q_size).to(device)
+        for i in reversed(range(Q_size)):
+            if index >= self.poss_combo**(size*i):
+                q, mod = divmod(index, self.poss_combo**(size*i))
                 reconstruct[i] = q * self.radius     #recover original discretized value
                 index = mod
             else:
@@ -89,7 +88,7 @@ class RmaxAgent:
                 mod = 0
                 reconstruct[i] = 0
         
-        return torch.reshape(reconstruct, (agent_size, env.num_actions)).to(device)
+        return torch.reshape(reconstruct, (size, env.d, env.num_actions)).to(device)
 
     def update(self, env, memory, state, action, next_state):
         state_mapped = self.find_meta_index( torch.flatten(state))
