@@ -1,0 +1,6 @@
+#!/bin/bash
+#SBATCH --gres=gpu:1
+#SBATCH --time=300:00:00
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=kitty.fung@magd.ox.ac.uk
+python3 Rmax_arch1_dict_1.py
