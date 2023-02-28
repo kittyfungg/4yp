@@ -35,8 +35,8 @@ meta_gamma = 0.5          #meta game discount factor
 meta_alpha = 0.4          #meta game learning rate
 R_max = 1
 inner_steps = 15
-meta_epi = 1500
-meta_steps = 500
+meta_epi = 150
+meta_steps = 50
 
 rmax_error = 0.2
 epsilon = 0.2

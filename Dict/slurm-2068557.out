@@ -1,4 +1,0 @@
-  File "/home/magd5245/Desktop/Work/Dict/Rmax_arch1_dict_1.py", line 257
-    figure0 = plt.gcf()poss_combo = math.ceil((1//(1-inner_gamma)) / radius) +1
-                       ^
-SyntaxError: invalid syntax

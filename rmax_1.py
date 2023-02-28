@@ -43,6 +43,7 @@ class RmaxAgent:
         if epsilon == None:
             epsilon = self.epsilon
         #set epsilon=-1 if we just want to get the max Q value without epsilon-greedy
+        
         if np.random.random() < epsilon:
             action = self.index_to_table(env, random.randint(0, self.meta_size-1), 1)
         else:

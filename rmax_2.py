@@ -1,5 +1,6 @@
 #Rmax code, cuda not yet incompatible
 import math
+import random
 import numpy as np
 import torch
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -21,15 +22,13 @@ class RmaxAgent:
         self.epsilon = epsilon
         self.max_inner_epi = max_inner_epi
         self.max_inner_steps = max_inner_steps
-    
-        #no of possible combinations for meta-s 
-        self.poss_combo_s = (env.d -1) * env.num_agents * (env.num_actions * torch.numel(torch.unique(env.innerr)))    #4 for number of rewards
+        self.radius = radius
         
-        #meta-s size
-        self.meta_S_size = self.poss_combo_s ** (self.max_inner_epi * self.max_inner_steps)
+        #meta-s size = no of possible combinations for meta-s 
+        self.meta_S_size = ((env.num_actions**env.num_agents) * (2**env.num_agents)) ** (self.max_inner_epi * self.max_inner_steps)  #2**2 for [0/1] reward for num_agents , same for [0/1] action value
         
         #meta-a size
-        self.meta_A_size = env.d ** env.num_actions     #5^2
+        self.meta_A_size = (math.ceil((1// self.radius) + 1)) ** (env.d * env.num_actions)  
         
         #Q for meta-game, *2 for 2 player  
         self.Q = torch.ones(self.meta_S_size , self.meta_A_size).mul(R_max / (1 - self.gamma)).to(device) 
@@ -45,15 +44,18 @@ class RmaxAgent:
         if np.random.random() < self.epsilon:
             action = env.action_space.sample()
         else:
-            action = torch.amax(self.Q[:,state,:], 2)
-        return action     #returns action of length b
+            #find maximum action index, given state, makes sure if indices have same Q value, randomise
+            lis = self.Q[state,:]
+            action = random.choice(torch.argwhere(lis == torch.max(lis)).to(device)) 
+            
+        return action     #returns action index
     
-    def find_meta_index(meta):
+    def find_meta_index(self, meta):
         index = int(0) #initialise index
 
         #for every digit in metastate/ metaaction:
         for i in range(list(meta.size())[0]):
-            index += meta[i] * ((math.ceil((1/(1-self.gamma)) / self.radius) + 1 )**i)
+            index += meta[i] * ((math.ceil((1// self.radius) + 1)) ** i)
 
         return int(index.item())
 
@@ -65,16 +67,16 @@ class RmaxAgent:
         if self.nSA[state_mapped][action_mapped] < self.m:
 
             self.nSA[state_mapped][action_mapped] += 1
-            self.R[state_mapped][action_mapped] += memory.rewards[-1]
+            self.R[state_mapped][action_mapped] += memory.rewards[-1].item()
             self.nSAS[state_mapped][action_mapped][next_state_mapped] += 1
 
             if self.nSA[state_mapped][action_mapped] == self.m:
 
                 for i in range(self.m):
 
-                    for s in range(self.meta_size * 2):
+                    for s in range(self.meta_S_size):
 
-                        for a in range(self.meta_size):
+                        for a in range(self.meta_A_size):
 
                             if self.nSA[s][a] >= self.m:
 

@@ -1,4 +1,5 @@
 import torch
+import random
 import numpy as np
 import os.path as osp
 import gym
@@ -59,7 +60,9 @@ class MetaGames:
         if np.random.random() < self.epsilon:
             action = torch.randint(0,2, (2, )).to(device)   #convert tuple-->tensor
         else:
-            action = torch.argmax(self.innerq, 1).to(device)    #find maximum from the second dimension(action dimension)
+            #makes sure if indices have same Q value, randomise
+            poss_max = torch.argwhere(self.innerq == torch.max(self.innerq)).to(device) 
+            action = random.choice(poss_max)    #find maximum from the second dimension(action dimension)
         return action   #returns action for all agents
         
     def step(self, action):
@@ -67,13 +70,5 @@ class MetaGames:
         self.rew1 = r1.detach().clone()
         self.rew2 = r2.detach().clone()
         return r1.detach(), r2.detach()
-    
-#     def choose_action(self):
-#     #chooses action that corresponds to the max Q value of the particular agent
-#         best_action = torch.empty((self.num_agents), dtype = torch.int64).to(device)
-        
-#         best_action[0] = torch.argmax(self.innerq[0, :])
-#         best_action[1] = torch.argmax(self.innerq[1, :])
-#         return best_action.detach()
-            
+
        
