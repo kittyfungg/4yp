@@ -26,7 +26,7 @@ class RmaxAgent:
         self.m = int(math.ceil(math.log(1 / (self.rmax_error * (1-self.meta_gamma))) / (1-self.meta_gamma)))   #calculate m number
         self.Rmax = R_max * self.m        #max Rmax depends on number of visitation as well
        
-        self.Q0 = round(self.Rmax / (1 - self.meta_gamma), 2)
+        self.Q0 = torch.round(torch.Tensor([self.Rmax / (1 - self.meta_gamma)]), decimals=2).to(device)
         
         #no of possible combinations for an inner Q value
         self.poss_combo = math.ceil((1//(1-inner_gamma)) / radius) +1
@@ -130,7 +130,9 @@ class RmaxAgent:
             self.Q["Qval"].append(self.Q0)
             
         #if s-a pair has been visited before
-        else:
+
+        #if visitation frequency < m (-1 since in this loop it reaches m)
+        elif self.nSA["nval"][-1] < self.m:
             #update nSA dictionary 
             self.nSA["state"].append(state_mapped)
             self.nSA["action"].append(action_mapped)
@@ -150,49 +152,47 @@ class RmaxAgent:
             else:                         #else +=1
                 self.nSAS["nvals"].append(self.nSAS["nvals"][pairs_index[-1]] + 1)
             
-            #if visitation frequency < m (-1 since in this loop it reaches m)
-            if self.nSA["nval"][-1] < self.m:
-                #update Q dicitonary by optimistic value
-                self.Q["state"].append(state_mapped)
-                self.Q["action"].append(action_mapped)
-                self.Q["Qval"].append(self.Q0)
+            #update Q dicitonary by optimistic value
+            self.Q["state"].append(state_mapped)
+            self.Q["action"].append(action_mapped)
+            self.Q["Qval"].append(self.Q0)
             
-            #else if visitation frequency reaches m 
-            elif self.nSA["nval"][-1] >= self.m:
-                #find s-a pair index
-                m_pair_index = []
-                for i,x in enumerate(self.nSA["nval"]):
-                    #if visited at least m times and nval is the max for entries that have the same state & action index
-                    if x >= self.m and i==max(self.find_pair_index([self.nSA["state"][i], self.nSA["action"][i]], self.nSA)):
-                        #append the indexes
-                        m_pair_index.append(i)
-                        print(m_pair_index)
-                                                            
-                for sas_ind in m_pair_index:
-                    #q = R/n + sum over next state(T * max_a(Q(s', a))                              
-                    q = (self.R["Rval"][sas_ind] / self.nSA["nval"][sas_ind])    #R/n first
-                    #calculate transition probability
-                    transition = self.nSAS["nvals"][sas_ind] / self.nSA["nval"][sas_ind]
-                                              
-                    #find max Q value given next_state
-                    poss_list=[]
-                    #find list of indices that has next_s
-                    for j, y in enumerate(self.Q["Qval"]):
-                        if self.Q["state"][j] == next_state_mapped:
-                            poss_list.append(j)
-                            
-                    if len(poss_list) != 0:    #if next-state hasn't been visited before, we do nothing
-                        #predict the transition of the next state
-                        
-                        #find index & value of maxQ(next_s, a)
-                        maxQ = max([z for k,z in enumerate(self.Q["Qval"]) if k in poss_list])
-                        maxQ_index = [z for k,z in enumerate(self.Q["Qval"]) if k in poss_list].index(maxQ)
-                        
-                        q += transition * maxQ
-                        #update Q dicitonary
-                        Q_pair_index = self.find_pair_index([self.Q["state"][maxQ_index], self.Q["action"][maxQ_index]], self.nSA)  
-                        self.Q["state"].append(self.Q["state"][maxQ_index])
-                        self.Q["action"].append(self.Q["action"][maxQ_index])
-                        self.Q["Qval"].append(q)  
+        #else if visitation frequency reaches m 
+        elif self.nSA["nval"][-1] >= self.m:
+            #find s-a pair index
+            m_pair_index = []
+            for i,x in enumerate(self.nSA["nval"]):
+                #if visited at least m times and nval is the max for entries that have the same state & action index
+                if x >= self.m and i==max(self.find_pair_index([self.nSA["state"][i], self.nSA["action"][i]], self.nSA)):
+                    #append the indexes
+                    m_pair_index.append(i)
+                    print(m_pair_index)
+
+            for sas_ind in m_pair_index:
+                #q = R/n + sum over next state(T * max_a(Q(s', a))                              
+                q = (self.R["Rval"][sas_ind] / self.nSA["nval"][sas_ind])    #R/n first
+                #calculate transition probability
+                transition = self.nSAS["nvals"][sas_ind] / self.nSA["nval"][sas_ind]
+
+                #find max Q value given next_state
+                poss_list=[]
+                #find list of indices that has next_s
+                for j, y in enumerate(self.Q["Qval"]):
+                    if self.Q["state"][j] == next_state_mapped:
+                        poss_list.append(j)
+
+                if len(poss_list) != 0:    #if next-state hasn't been visited before, we do nothing
+                    #predict the transition of the next state
+
+                    #find index & value of maxQ(next_s, a)
+                    maxQ = max([z for k,z in enumerate(self.Q["Qval"]) if k in poss_list])
+                    maxQ_index = [z for k,z in enumerate(self.Q["Qval"]) if k in poss_list].index(maxQ)
+
+                    q += transition * maxQ.item()
+                    #update Q dicitonary
+                    Q_pair_index = self.find_pair_index([self.Q["state"][maxQ_index], self.Q["action"][maxQ_index]], self.nSA)  
+                    self.Q["state"].append(self.Q["state"][maxQ_index])
+                    self.Q["action"].append(self.Q["action"][maxQ_index])
+                    self.Q["Qval"].append(q)  
 
 

@@ -17,13 +17,14 @@ class Memory:
         del self.rewards[:]
         
 class RmaxAgent:
-    def __init__(self, env, R_max, meta_gamma, inner_gamma, radius, epsilon = 0.2):
+    def __init__(self, env, R_max, meta_gamma, inner_gamma, radius, epsilon, rmax_error):
         self.meta_gamma = meta_gamma
         self.inner_gamma = inner_gamma
         self.epsilon = epsilon
+        self.rmax_error = rmax_error   #rmax_error for discretization error
         self.radius = radius               #added decimal place for Q & R matrix dimension
         
-        self.m = int(math.ceil(math.log(1 / (self.epsilon * (1-self.meta_gamma))) / (1-self.meta_gamma)))   #calculate m number
+        self.m = int(math.ceil(math.log(1 / (self.rmax_error * (1-self.meta_gamma))) / (1-self.meta_gamma)))   #calculate m number
         self.Rmax = R_max * self.m
         self.Q0 = round(self.Rmax  / (1 - self.meta_gamma), 2)
         
@@ -38,8 +39,11 @@ class RmaxAgent:
         self.nSAS = torch.zeros(self.meta_size ** 2, self.meta_size, self.meta_size ** 2).to(device)
     
         
-    def select_action(self, env, state):
-        if np.random.random() < self.epsilon:
+    def select_action(self, env, state, epsilon = None):
+        if epsilon == None:
+            epsilon = self.epsilon
+        #set epsilon=-1 if we just want to get the max Q value without epsilon-greedy
+        if np.random.random() < epsilon:
             action = self.index_to_table(env, random.randint(0, self.meta_size-1), 1)
         else:
             #find maximum action index, given state, makes sure if indices have same Q value, randomise
@@ -77,19 +81,21 @@ class RmaxAgent:
         action_mapped = self.find_meta_index( torch.flatten(action))
         state_mapped = self.find_meta_index( torch.flatten(state))
         next_state_mapped = self.find_meta_index( torch.flatten(next_state))
+        
+        if self.nSA[state_mapped][action_mapped] < self.m:
+            
+            if self.nSA[state_mapped][action_mapped] == 0:   #if the s-a pair hasn't been visited before,
+                self.R[state_mapped][action_mapped] = memory.rewards[-1]   #Input R as inner reward
+            else:                                           #if visited, R builds on previous R
+                self.R[state_mapped][action_mapped] = memory.rewards[-1] + self.meta_gamma * self.R[state_mapped][action_mapped] 
+                #try no discount factor
+                #self.R[state_mapped][action_mapped] += memory.rewards[-1]
 
-        if self.nSA[state_mapped][action_mapped] == 0:   #if the s-a pair hasn't been visited before,
-            self.R[state_mapped][action_mapped] = memory.rewards[-1]   #Input R as inner reward
-        else:                                           #if visited, R builds on previous R
-            self.R[state_mapped][action_mapped] = memory.rewards[-1] + self.meta_gamma * self.R[state_mapped][action_mapped] 
-            #try no discount factor
-            #self.R[state_mapped][action_mapped] += memory.rewards[-1]
-        
-        self.nSA[state_mapped][action_mapped] += 1
-        self.nSAS[state_mapped][action_mapped][next_state_mapped] += 1
-        
+            self.nSA[state_mapped][action_mapped] += 1
+            self.nSAS[state_mapped][action_mapped][next_state_mapped] += 1
+
         #Update Q if it's visited m times
-        if self.nSA[state_mapped][action_mapped] >= self.m:
+        else:
 
             for i in range(self.m):
 
