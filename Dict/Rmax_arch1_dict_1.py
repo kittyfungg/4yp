@@ -233,13 +233,6 @@ with open('rmax' + str(datetime.now()) + '.pkl', 'wb') as file:
 # 
 # # Plots
 
-# In[9]:
-
-
-poss_combo = math.ceil((1//(1-inner_gamma)) / radius) +1
-meta_size = poss_combo ** (env.d * env.num_actions)
-print(meta_size)
-
 
 # In[7]:
 

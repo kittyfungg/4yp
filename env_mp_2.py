@@ -58,10 +58,10 @@ class MetaGames:
     def select_action(self):
         #select action for both agents
         if np.random.random() < self.epsilon:
-            action = torch.randint(0,2, (2, )).to(device)   #convert tuple-->tensor
+            action = torch.randint(0,2, (1, )).to(device)   #convert tuple-->tensor
         else:
             #makes sure if indices have same Q value, randomise
-            poss_max = torch.argwhere(self.innerq == torch.max(self.innerq)).to(device) 
+            poss_max = torch.argwhere(self.innerq[1] == torch.max(self.innerq[1])).to(device) 
             action = random.choice(poss_max)    #find maximum from the second dimension(action dimension)
         return action   #returns action for all agents
         

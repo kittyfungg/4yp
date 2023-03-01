@@ -44,11 +44,6 @@ class RmaxAgent:
             action = torch.randint(self.meta_size)
         else:
             #find possible indices of given state
-            #poss_indices = [i for i,x in enumerate(len(self.nSA.get("nval"))) if self.nSA.get("state") == self.find_meta_index(torch.flatten(state), self.radius, self.poss_combo)]
-            
-            #find action that corresponds to max. Q value
-            #action = torch.argmax([self.Q["Qval"][i] for i in poss_indices])  
-            #find possible indices of given state
             poss_val = [i for i in self.nSA.get("nval") if self.nSA.get("state") == self.find_meta_index(torch.flatten(state), self.radius, self.poss_combo)]
             
             rand_from_poss_max = random.choice(torch.argwhere(poss_val == torch.max(poss_val)).to(device)) 
