@@ -116,5 +116,5 @@ class RmaxAgent:
 
                             
         if memory.rewards[-1]!=1:
-            self.R[state_mapped][action_mapped] = -10
+            self.R[state_mapped][action_mapped] = 0
             

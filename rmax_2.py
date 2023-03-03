@@ -17,12 +17,13 @@ class Memory:
         del self.rewards[:]
         
 class RmaxAgent:
-    def __init__(self, env, R_max, gamma, max_inner_epi, max_inner_steps, radius, epsilon = 0.2):
+    def __init__(self, env, R_max, gamma, max_inner_epi, max_inner_steps, radius, epsilon, rmax_error):
         self.gamma = gamma
         self.epsilon = epsilon
         self.max_inner_epi = max_inner_epi
         self.max_inner_steps = max_inner_steps
         self.radius = radius
+        self.rmax_error = rmax_error
         
         #meta-s size = no of possible combinations for meta-s 
         self.meta_S_size = ((env.num_actions**env.num_agents) * (2**env.num_agents)) ** (self.max_inner_epi * self.max_inner_steps)  #2**2 for [0/1] reward for num_agents , same for [0/1] action value
@@ -38,7 +39,7 @@ class RmaxAgent:
         
         self.val1 = []
         self.val2 = []  #This is for keeping track of rewards over time and for plotting purposes  
-        self.m = int(math.ceil(math.log(1 / (self.epsilon * (1-self.gamma))) / (1-self.gamma)))   #calculate m number
+        self.m = int(math.ceil(math.log(1 / (self.rmax_error * (1-self.gamma))) / (1-self.gamma)))   #calculate m number
         
     def select_action(self, state):
         if np.random.random() < self.epsilon:

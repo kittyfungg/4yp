@@ -26,14 +26,15 @@ from rmax_2 import RmaxAgent, Memory
 
 K_epochs = 4  # update policy for K epochs
 inner_gamma = 0.8  #inner game discount factor
-meta_gamma = 0.8   #meta game discount factor
+meta_gamma = 0.98   #meta game discount factor
 R_max = 0.98
-meta_epi = 500
-meta_steps = 50
+meta_epi = 2000
+meta_steps = 400
 inner_epi = 1
 inner_steps = 1
 
-epsilon=0.2
+rmax_error = 0.05
+epsilon=0.05
 alpha = 0.4
 radius = 1
 
@@ -42,7 +43,7 @@ env = MetaGames("NL", "IPD")
 
 # creating rmax agent
 memory = Memory()
-rmax = RmaxAgent(env, R_max, meta_gamma, inner_epi, inner_steps, radius, epsilon)
+rmax = RmaxAgent(env, R_max, meta_gamma, inner_epi, inner_steps, radius, epsilon, rmax_error)
 
 #all agents' trajectory, entries will be like {[s1, a1, r1], [s2, a2, r2],...}
 traj = torch.empty(inner_epi, inner_steps,4).to(device) 
@@ -53,7 +54,7 @@ oppo_rew = 0   #opponent's reward
 plot_rew = torch.zeros(meta_epi, meta_steps, 2).to(device)  
 
 
-# In[6]:
+# In[3]:
 
 
 #initialise meta-state = empty trajectory
@@ -63,8 +64,7 @@ memory.states.append(meta_s)
 for episode in tqdm(range(meta_epi)): #for each meta-episode
     #reset environment
     env.reset() 
-    
-    env.innerq
+
     for step in range(meta_steps):    #for each meta time step
         poss_max= torch.argwhere(rmax.Q[rmax.find_meta_index( torch.flatten(meta_s)),:] == torch.max(rmax.Q[rmax.find_meta_index( torch.flatten(meta_s)),:])).to(device) 
         env.innerq[0] = random.choice(poss_max)    #find maximum from the second dimension(action dimension)
@@ -131,7 +131,7 @@ for episode in tqdm(range(meta_epi)): #for each meta-episode
 
 # # Plots
 
-# In[7]:
+# In[4]:
 
 
 #generate histogram
@@ -194,14 +194,14 @@ plt.savefig('ARCH2_inner_gamma' + str(inner_gamma) + '_rad' + str(radius) + '_' 
 plt.clf()
 
 
-# In[11]:
+# In[16]:
 
 
 #generate learning curve at end
 plot_rew_epi_end = torch.mean(plot_rew[-int(meta_epi*0.1):, :, 0], 0)
 fig_handle = plt.plot(plot_rew_epi_end.cpu().numpy())
 
-plt.xlabel("steps")
+plt.xlabel("steps \n mean reward in first "+ str(int(meta_epi*0.1)) + " episodes: " + str(torch.mean(plot_rew_epi_end, 0).item()))
 
 plt.ylabel("Average learning rate of last " + str(int(meta_epi*0.1)) + " episodes")
 
