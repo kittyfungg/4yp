@@ -83,17 +83,17 @@ class RmaxAgent:
         state_mapped = self.find_meta_index( torch.flatten(state))
         next_state_mapped = self.find_meta_index( torch.flatten(next_state))
         
-        if self.nSA[state_mapped][action_mapped] < self.m:
+        if self.nSA[:, state_mapped, action_mapped] < self.m:
             
-            if self.nSA[state_mapped][action_mapped] == 0:   #if the s-a pair hasn't been visited before,
-                self.R[state_mapped][action_mapped] = memory.rewards[-1]   #Input R as inner reward
+            if self.nSA[:, state_mapped, action_mapped] == 0:   #if the s-a pair hasn't been visited before,
+                self.R[:, state_mapped, action_mapped] = memory.rewards[-1]   #Input R as inner reward
             else:                                           #if visited, R builds on previous R
-                self.R[state_mapped][action_mapped] = memory.rewards[-1] + self.meta_gamma * self.R[state_mapped][action_mapped] 
+                self.R[:, state_mapped, action_mapped] = memory.rewards[-1] + self.meta_gamma * self.R[:, state_mapped, action_mapped] 
                 #try no discount factor
                 #self.R[state_mapped][action_mapped] += memory.rewards[-1]
 
-            self.nSA[state_mapped][action_mapped] += 1
-            self.nSAS[state_mapped][action_mapped][next_state_mapped] += 1
+            self.nSA[:, state_mapped, action_mapped] += 1
+            self.nSAS[:, state_mapped, action_mapped, next_state_mapped] += 1
 
         #Update Q if it's visited m times
         else:
@@ -104,17 +104,17 @@ class RmaxAgent:
 
                     for a in range(self.meta_size):
 
-                        if self.nSA[s][a] >= self.m:
+                        if self.nSA[:, s, a] >= self.m:
 
-                            q = (self.R[s][a]/self.nSA[s][a])
+                            q = (self.R[:, s, a]/self.nSA[:, s, a])
 
                             for next_s in range(env.d * 2):
-                                transition = self.nSAS[s][a][next_s]/self.nSA[s][a]
-                                q += (transition * torch.max(self.Q[next_s,:]))
+                                transition = self.nSAS[:, s, a, next_s]/self.nSA[:, s, a]
+                                q += transition * np.amax(self.Q[:, next_s, :], axis = 2)
                             
-                            self.Q[state_mapped][action_mapped] = q
+                            self.Q[:, state_mapped, action_mapped] = q
 
                             
         if memory.rewards[-1]!=1:
-            self.R[state_mapped][action_mapped] = 0
+            self.R[:, state_mapped, action_mapped] = 0
             

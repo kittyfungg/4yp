@@ -26,14 +26,8 @@ def mp_one_iteration():
     return dims, Reward
 
 class MetaGames:
-    def __init__(self, opponent="NL", game="IPD"):
-        """
-        Opponent can be:
-        NL = Naive Learner (gradient updates through environment).
-        LOLA = Gradient through NL.
-        STATIC = Doesn't learn.
-        COPYCAT = Copies what opponent played last step.
-        """
+    def __init__(self):
+ 
         d, self.game= mp_one_iteration()
         self.epsilon = 0.8
         self.lr = 1

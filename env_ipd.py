@@ -25,14 +25,7 @@ def pd_one_iteration_batched(bs):
     return dims, Reward
 
 class MetaGames:
-    def __init__(self, b, opponent="NL", game="IPD"):
-        """
-        Opponent can be:
-        NL = Naive Learner (gradient updates through environment).
-        LOLA = Gradient through NL.
-        STATIC = Doesn't learn.
-        COPYCAT = Copies what opponent played last step.
-        """
+    def __init__(self, b):
         self.gamma_inner = 0.96
         self.b = b
         
