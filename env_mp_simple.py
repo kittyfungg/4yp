@@ -111,6 +111,7 @@ class MetaGamesSimplest:
     def __init__(self):
         self.epsilon = 0.8
         self.lr = 1.0
+        self.max_steps = 4
         #reward table with discretized dimensions, (actions, agents) (no states since num of state =1)
 
     def reset(self):
@@ -139,7 +140,7 @@ class MetaGamesSimplest:
         self.inner_policy = 1 - action
 
         # CHECK DONE
-        done = self.t > 10
+        done = self.t >= self.max_steps
 
         return observation, r1, done, {"r1": r1, "r2": r2}
     
