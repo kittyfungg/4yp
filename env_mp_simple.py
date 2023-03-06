@@ -116,10 +116,11 @@ class MetaGamesSimplest:
 
     def reset(self):
         #Initialise inner policy randomly
-        self.inner_policy = np.random.randint(0, 2)
+        temp_inner_policy = np.random.randint(0, 2)
         self.init_action = np.random.randint(0,2)
+        self.inner_policy = 1 - self.init_action
         self.t = 0
-        return np.concatenate([self.inner_policy, self.init_action, self.t], axis=0) # OBS: INNER_ACT, ACTION, TIMESTEP
+        return np.concatenate([temp_inner_policy, self.init_action, self.t], axis=0) # OBS: INNER_ACT, ACTION, TIMESTEP
 
     def step(self, action):
         opponent_action = self.inner_policy
