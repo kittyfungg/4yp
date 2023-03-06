@@ -96,7 +96,6 @@ class RmaxAgent:
         state_mapped = self.find_meta_index(state).astype(int)
         next_state_mapped = self.find_meta_index(next_state).astype(int)
         
-        
         #FOR nSA<m CASE:
         #filter for nSA<m
         mask00 = self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m
@@ -119,15 +118,16 @@ class RmaxAgent:
             for s in range(self.meta_size * 2):
 
                 for a in range(self.meta_size):
-
+                
                     mask11 = self.nSA[:, s, a] >= self.m
-                    q = self.R[mask11, s, a]/self.nSA[mask11, s, a]
+                    if any(mask11)==True:
+                        q = self.R[mask11, s, a]/self.nSA[mask11, s, a]
 
-                    for next_s in range(env.d * 2):
-                        transition = self.nSAS[mask11, s, a, next_s]/self.nSA[mask11, s, a]
-                        q += transition * np.amax(self.Q[:,next_s,:], axis=1)
+                        for next_s in range(env.d * 2):
+                            transition = self.nSAS[mask11, s, a, next_s]/self.nSA[mask11, s, a]
+                            q += transition * np.amax(self.Q[mask11, next_s, :], axis=1)
 
-                    self.Q[mask11, s, a] = q
+                        self.Q[mask11, s, a] = q
                     
 #         if memory.rewards[-1]!=1:
 #             self.R[mask10] = 0
