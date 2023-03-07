@@ -55,8 +55,11 @@ class MetaGames:
         else:
             #makes sure if indices have same Q value, randomise
             for b in range(self.bs):
-                poss_max = np.argwhere(self.innerq[b,1] == np.amax(self.innerq[b,1,:]))
-                action[b] = np.random.choice(poss_max.squeeze())   #find maximum from opponent's inner q table
+                poss_max = np.argwhere(self.innerq[b,1] == np.amax(self.innerq[b,1,:])).reshape((-1,1))
+                if poss_max.shape[0] == 2:
+                    action[b] = np.random.choice(poss_max.reshape((2,)))   #find maximum from opponent's inner q table
+                else:
+                    action[b] = np.random.choice(poss_max.reshape((1,)))
         return action     #returns action for all agents
         
     def step(self, action):
@@ -66,3 +69,5 @@ class MetaGames:
         return r1, r2
     
        
+
+        

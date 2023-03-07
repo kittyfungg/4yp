@@ -108,34 +108,32 @@ class MetaGamesSimple:
         return observation, r1, done, {"r1": r1, "r2": r2}
     
 class MetaGamesSimplest:
-    def __init__(self):
+    #meta-s = [oppo_act, our_act, t]
+    def __init__(self, bs):
+        self.bs = bs
         self.epsilon = 0.8
         self.lr = 1.0
-        self.max_steps = 4
+        self.max_steps = 5
         #reward table with discretized dimensions, (actions, agents) (no states since num of state =1)
 
     def reset(self):
         #Initialise inner policy randomly
-        temp_inner_policy = np.random.randint(0, 2)
-        self.init_action = np.random.randint(0,2)
+        temp_inner_policy = np.random.randint(2, size=(self.bs,))
+        self.init_action = np.random.randint(2, size=(self.bs,))
         self.inner_policy = 1 - self.init_action
-        self.t = 0
-        return np.concatenate([temp_inner_policy, self.init_action, self.t], axis=0) # OBS: INNER_ACT, ACTION, TIMESTEP
+        self.t = np.zeros(self.bs)
+        return np.stack([temp_inner_policy, self.init_action, self.t], axis=1) # OBS: INNER_ACT, ACTION, TIMESTEP
 
     def step(self, action):
         opponent_action = self.inner_policy
 
         # PLAY GAME, GET REWARDS
-        r1 = int(opponent_action == action)
+        r1 = (opponent_action == action)*1
         r2 = 1 - r1
         self.t += 1
 
         # GENERATE OBSERVATION
-        observation = np.concatenate([
-            self.inner_policy,
-            action,
-            self.t
-        ], axis=0) # MAKE SURE SHAPES LINE UP
+        observation = np.stack([self.inner_policy, action, self.t], axis=1) # MAKE SURE SHAPES LINE UP
 
         # UPDATE OPPONENT POLICY
         self.inner_policy = 1 - action

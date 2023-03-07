@@ -14,46 +14,49 @@ class Memory:
         del self.rewards[:]
         
 class RmaxAgent:
-    def __init__(self, env, R_max, bs, meta_gamma, inner_gamma, radius, epsilon, rmax_error):
+    def __init__(self, R_max, bs, meta_steps, meta_gamma, inner_gamma, radius, epsilon, rmax_error):
         self.bs = bs
         self.meta_gamma = meta_gamma
         self.inner_gamma = inner_gamma
         self.epsilon = epsilon
         self.rmax_error = rmax_error   #rmax_error for discretization error
         self.radius = radius               #added decimal place for Q & R matrix dimension
-        
+
         self.m = int(math.ceil(math.log(1 / (self.rmax_error * (1-self.meta_gamma))) / (1-self.meta_gamma)))   #calculate m number
         self.Rmax = R_max * self.m
         self.Q0 = round(self.Rmax  / (1 - self.meta_gamma), 2)
         
         #no of possible combinations for an inner Q value
-        self.poss_combo = math.ceil((1//(1-inner_gamma)) / radius) +1
-        self.meta_size = self.poss_combo ** (env.d * env.num_actions)
+        #self.poss_combo = math.ceil((1//(1-inner_gamma)) / radius) +1
+        #self.meta_size = self.poss_combo ** (env.d * env.num_actions)
+        self.ns = 2 * 2 * meta_steps
+        self.na = 2
         
         #Q = [bs, meta_state, meta_action], **2 for 2 player  
-        self.Q = np.ones((self.bs, self.meta_size ** 2, self.meta_size)) * self.Q0
-        self.R = np.zeros((self.bs, self.meta_size ** 2, self.meta_size))
-        self.nSA = np.zeros((self.bs, self.meta_size ** 2, self.meta_size))
-        self.nSAS = np.zeros((self.bs, self.meta_size ** 2, self.meta_size, self.meta_size ** 2))
+        self.Q = np.ones((self.bs, self.ns, self.na)) * self.Q0
+        self.R = np.zeros((self.bs, self.ns, self.na))
+        self.nSA = np.zeros((self.bs, self.ns, self.na))
+        self.nSAS = np.zeros((self.bs, self.ns, self.na, self.ns))
     
-    def find_meta_index(self, meta):
-        #meta is of size [bs=1028, 0, action_dimension=9]
+    def find_meta_index(self, meta, obj):
+        #obj can only be "s" / "a"
+        #meta is of size [bs=1028, action_dimension=9]
         index = np.zeros(self.bs) #initialise index
         
-        if len(meta.shape) > 2:
-            meta = meta.reshape(self.bs, len(meta[1])+len(meta[2]))       #reshape it so [bs,2,2] --> [bs,4]
-    
-        #for every digit in meta-action/state:
-        for i in range(len(meta[1])):
-            index[:] += (meta[:, i]//self.radius) * (self.poss_combo ** i)
+        if obj == "s":
+            
+            index[:] = (meta[:, 2]//self.radius) + (meta[:, 1]//self.radius)* 5 + (meta[:, 0]//self.radius)* 10
+
+        if obj == "a":
+            index = meta
 
         return index
                 
-    def index_to_table(self, env, index, agent_size):
+    def index_to_table(self, index):
         #VERY POORLY WRITTEN HARDCODING
         #returns a table of size [bs, agent_size, num_states, num_actions], given index
         #agent_size either 1/2, 1 for action table, 2 for state table
-        Q_size = agent_size * env.d * env.num_actions 
+        Q_size = 2
         reconstruct = np.zeros((self.bs, Q_size))
         
         q3, mod3 = np.divmod(index, self.poss_combo**(Q_size-1))
@@ -62,68 +65,72 @@ class RmaxAgent:
         q2, mod2 = np.divmod(mod3, self.poss_combo**(Q_size-2))
         reconstruct[:, (Q_size-2)] = q2*self.radius
 
-        q1, mod1 = np.divmod(mod2, self.poss_combo**(Q_size-3))
-        reconstruct[:, (Q_size-3)] = q1*self.radius
+#         q1, mod1 = np.divmod(mod2, self.poss_combo**(Q_size-3))
+#         reconstruct[:, (Q_size-3)] = q1*self.radius
 
-        q0, _ = np.divmod(mod1, self.poss_combo**(Q_size-4))
-        reconstruct[:, (Q_size-4)] = q0*self.radius
+#         q0, _ = np.divmod(mod1, self.poss_combo**(Q_size-4))
+#         reconstruct[:, (Q_size-4)] = q0*self.radius
         
         #return np.reshape(reconstruct, (self.bs, agent_size, env.d, env.num_actions)) ignored env.d since =1
-        return np.reshape(reconstruct, (self.bs, agent_size, env.num_actions))
+        return np.reshape(reconstruct, (self.bs, self.ns, self.na))
     
-    def select_action(self, env, state, epsilon = None):
+    def select_action(self, state, epsilon = None):
         if epsilon == None:
             epsilon = self.epsilon
         #set epsilon=-1 if we just want to get the max Q value without epsilon-greedy
         
         rand_from_poss_max = np.zeros(self.bs) 
-        if np.random.random() < epsilon:
-            action = self.index_to_table(env, np.random.randint(self.meta_size-1, size=(self.bs)), 1)
+        if np.random.random() < epsilon:   
+            action = self.index_to_table(np.random.randint(self.na, size=(self.bs)))
         
         else:
             #find maximum action index, given state, makes sure if indices have same Q value, randomise
 
-            lis = self.Q[range(self.bs), self.find_meta_index(state).astype(int), :]
+            lis = self.Q[range(self.bs), self.find_meta_index(state, "s").astype(int), :]
             for b in range(self.bs):
                 rand_from_poss_max[b] = np.random.choice(np.argwhere(lis[b] == np.max(lis[b])).squeeze())
                                       
-            action = self.index_to_table(env, rand_from_poss_max, 1) 
+            action = rand_from_poss_max
         return action     #returns action index
     
                                 
-    def update(self, env, memory, state, action, next_state):
-        action_mapped = self.find_meta_index(action).astype(int)
-        state_mapped = self.find_meta_index(state).astype(int)
-        next_state_mapped = self.find_meta_index(next_state).astype(int)
+    def update(self, memory, state, action, next_state):
+        action_mapped = self.find_meta_index(action, "a").astype(int)
+        state_mapped = self.find_meta_index(state, "s").astype(int)
+        next_state_mapped = self.find_meta_index(next_state, "s").astype(int)
         
         #FOR nSA<m CASE:
         #filter for nSA<m
-        mask00 = self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m
+        idx00 = np.where(self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m)[0]
         
         #filter for nSA=0
-        mask01 = mask00 & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] == 0)
+        idx01 = np.where((self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m) & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] == 0))[0]
         #filter for 0<nSA<m
-        mask02 = mask00 & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] > 0)
+        idx02 = np.where((self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m) & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] > 0))[0]
         
-        self.R[mask01, state_mapped, action_mapped] = memory.rewards[-1]   #Input R as inner reward
-        if all(mask02)!= False:
-            self.R[mask02, state_mapped, action_mapped] = memory.rewards[-1] + self.meta_gamma * self.R[mask02, state_mapped, action_mapped] 
-        self.nSA[mask00, state_mapped, action_mapped] += 1
-        self.nSAS[mask00, state_mapped, action_mapped, next_state_mapped] += 1
-        
+        if len(idx01) > 0:
+            np.put(self.R, np.ravel_multi_index((np.arange(self.bs)[idx01], state_mapped[idx01], action_mapped[idx01]), self.R.shape), memory.rewards[-1])
+            
+        if len(idx02) > 0:
+            np.put(self.R, np.ravel_multi_index((np.arange(self.bs)[idx02], state_mapped[idx02], action_mapped[idx02]), self.R.shape), memory.rewards[-1] + self.meta_gamma * self.R.ravel()[np.ravel_multi_index((np.arange(self.bs)[idx02], state_mapped[idx02], action_mapped[idx02]), R.shape)])
+            
+            np.put(self.nSA, np.ravel_multi_index((np.arange(self.bs)[idx00], state_mapped[idx00], action_mapped[idx00]), self.R.shape), 1 + self.nSA.ravel()[np.ravel_multi_index((np.arange(self.bs)[idx00], state_mapped[idx00], action_mapped[idx00]), R.shape)])
+            
+            np.put(self.nSAS, np.ravel_multi_index((np.arange(self.bs)[idx00], state_mapped[idx00], action_mapped[idx00]), next_state_mapped[idx00], self.R.shape), 1 + self.nSA.ravel()[np.ravel_multi_index((np.arange(self.bs)[idx00], state_mapped[idx00], action_mapped[idx00]), next_state_mapped[idx00], R.shape)])
+                   
         #FOR nSA>=m CASE:
         mask10 = self.nSA[np.arange(self.bs), state_mapped, action_mapped] >= self.m
         for i in range(self.m):
 
-            for s in range(self.meta_size * 2):
+            for s in range(self.ns):
 
-                for a in range(self.meta_size):
+                for a in range(self.na):
                 
                     mask11 = self.nSA[:, s, a] >= self.m
                     if any(mask11)==True:
                         q = self.R[mask11, s, a]/self.nSA[mask11, s, a]
 
-                        for next_s in range(env.d * 2):
+                        for next_s in range(self.ns):
                             transition = self.nSAS[mask11, s, a, next_s]/self.nSA[mask11, s, a]
                             q += transition * np.amax(self.Q[mask11, next_s, :], axis=1)
 
