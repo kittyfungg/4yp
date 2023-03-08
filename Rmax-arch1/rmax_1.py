@@ -112,7 +112,7 @@ class RmaxAgent:
                                 transition = self.nSAS[:, s, a, next_s]/self.nSA[:, s, a]
                                 q += transition * np.amax(self.Q[:, next_s, :], axis = 2)
                             
-                            self.Q[:, state_mapped, action_mapped] = q
+                            self.Q[:, s, a] = q
 
                             
         if memory.rewards[-1]!=1:

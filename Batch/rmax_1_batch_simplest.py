@@ -27,7 +27,7 @@ class RmaxAgent:
         self.Q0 = round(self.Rmax  / (1 - self.meta_gamma), 2)
         
         self.meta_steps= meta_steps
-        self.ns = ((1//self.radius)+1)^4
+        self.ns = 2 * 2 * meta_steps
         self.na = 2
         
         #Q = [bs, meta_state, meta_action], **2 for 2 player  
@@ -43,7 +43,7 @@ class RmaxAgent:
         
         if obj == "s":
             
-            index[:] = 
+            index[:] = (meta[:, 2]//self.radius) + (meta[:, 1]//self.radius)* self.meta_steps + (meta[:, 0]//self.radius)* (2 * self.meta_steps)
 
         if obj == "a":
             index = meta
@@ -65,7 +65,9 @@ class RmaxAgent:
 
         return np.reshape(reconstruct, (self.bs, self.ns, self.na))
     
-    def select_action(self, state, epsilon = self.epsilon):
+    def select_action(self, state, epsilon = None):
+        if epsilon == None:
+            epsilon = self.epsilon
         #set epsilon=-1 if we just want to get the max Q value without epsilon-greedy
         
         rand_from_poss_max = np.zeros(self.bs) 
