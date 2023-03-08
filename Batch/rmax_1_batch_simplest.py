@@ -54,14 +54,13 @@ class RmaxAgent:
         #VERY POORLY WRITTEN HARDCODING
         #returns a table of size [bs, agent_size, num_states, num_actions], given index
         #agent_size either 1/2, 1 for action table, 2 for state table
-        Q_size = 2
+        Q_size = 4
         reconstruct = np.zeros((self.bs, Q_size))
         
-        q3, mod3 = np.divmod(index, self.poss_combo**(Q_size-1))
-        reconstruct[:, (Q_size-1)] = q3*self.radius
-
-        q2, mod2 = np.divmod(mod3, self.poss_combo**(Q_size-2))
-        reconstruct[:, (Q_size-2)] = q2*self.radius
+        for i in range(Q_size):
+            qi, modi = np.divmod(index, self.poss_combo**(Q_size-i))
+            reconstruct[:, i] = qi*self.radius
+            index=modi
 
         return np.reshape(reconstruct, (self.bs, self.ns, self.na))
     
