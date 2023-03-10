@@ -13,8 +13,8 @@ class Memory:
         del self.states[:]
         del self.rewards[:]
         
-class RmaxAgent:
-    def __init__(self, R_max, bs, meta_steps, meta_gamma, inner_gamma, radius, epsilon, rmax_error):
+class RmaxAgentTraj:
+    def __init__(self, R_max, bs, meta_steps, meta_gamma, inner_gamma, radius, epsilon, rmax_error, hist_step):
         self.bs = bs
         self.meta_gamma = meta_gamma
         self.inner_gamma = inner_gamma
@@ -27,8 +27,9 @@ class RmaxAgent:
         self.Q0 = round(self.Rmax  / (1 - self.meta_gamma), 2)
         
         self.meta_steps= meta_steps
-        self.ns = int(((1//self.radius)+1)**2) * 2 * meta_steps
-        self.na = int(2**2)
+        self.hist_step = hist_step
+        self.ns = (4**hist_step) * meta_steps
+        self.na = 2
         
         #Q = [bs, meta_state, meta_action], **2 for 2 player  
         self.Q = np.ones((self.bs, self.ns, self.na)) * self.Q0
@@ -38,52 +39,23 @@ class RmaxAgent:
     
     def find_meta_index(self, meta, obj):
         #obj can only be "s" / "a"
-        #meta is of size [bs=1028, action_dimension]
+        #meta is of size [bs=1028, action_dimension=9]
         index = np.zeros(self.bs) #initialise index
         
         if obj == "s":
-            index[:]= meta[:, 3] + (meta[:, 2] * self.meta_steps) + (meta[:, 1] * (2 * self.meta_steps)) + (meta[:, 0] * ((1//self.radius)+1) * 2 * self.meta_steps)
-
+            #index[:] = (meta[:, -1]) 
+            #for i in range(len(meta[0])-1):
+            #    index[:] += meta[:, -i-2]* ( (2**i) * self.meta_steps)
+            index[:] = meta[:, 2] + meta[:, 1]* self.meta_steps + meta[:, 0] * (2 * self.meta_steps)
         if obj == "a":
-            for j in range(2):
-                index[:] += (meta[:, j]//self.radius) * (2**j) 
+            index = meta
 
         return index
-                
-    def index_to_table(self, index):
-        #VERY POORLY WRITTEN HARDCODING, just for meta-a
-        #returns a table of size [bs, num_actions], given index
-        Q_size = 2
-        reconstruct = np.zeros((self.bs, Q_size))
-        
-        for i in range(Q_size):
-            qi, modi = np.divmod(index, 2**(Q_size-1-i))
-            reconstruct[:, i] = qi*self.radius
-            index=modi
-
-        return np.reshape(reconstruct, (self.bs, 2))
-    
-    def select_action(self, state):
-        rand_from_poss_max = np.zeros(self.bs) 
-        if np.random.random() < self.epsilon:   
-            action = np.random.randint(self.na, size=(self.bs, ))
-        
-        else:
-            #find maximum action index, given state, makes sure if indices have same Q value, randomise
-            lis = self.Q[range(self.bs), self.find_meta_index(state, "s").astype(int), :]
-            for b in range(self.bs):
-                if len(np.argwhere(lis[b] == np.max(lis[b]))) < 2:   #when there's only 1 max value
-                    rand_from_poss_max[b] = np.argwhere(lis[b] == np.max(lis[b]))
-                else:
-                    rand_from_poss_max[b] = np.random.choice(np.argwhere(lis[b] == np.max(lis[b])).squeeze())
-                                      
-            action = rand_from_poss_max
-        return self.index_to_table(action)     #returns action from action index
                                 
-    def update(self, memory, meta_s, meta_a, new_meta_s):
-        action_mapped = self.find_meta_index(meta_a, "a").astype(int)
-        state_mapped = self.find_meta_index(meta_s, "s").astype(int)
-        next_state_mapped = self.find_meta_index(new_meta_s, "s").astype(int)
+    def update(self, memory, state, action, next_state):
+        action_mapped = self.find_meta_index(action, "a").astype(int)
+        state_mapped = self.find_meta_index(state, "s").astype(int)
+        next_state_mapped = self.find_meta_index(next_state, "s").astype(int)
         
         #FOR nSA<m CASE:
         #filter for nSA<m
@@ -95,10 +67,10 @@ class RmaxAgent:
         idx02 = np.argwhere((self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m) & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] > 0))
         
         if len(idx01) > 0:
-            self.R[idx01, state_mapped[idx01] , action_mapped[idx01]] = memory.rewards[-1][idx01].squeeze(axis=1)
+            self.R[idx01, state_mapped[idx01] , action_mapped[idx01]] = memory.rewards[-1][idx01]
             
         if len(idx02) > 0:
-            self.R[idx02, state_mapped[idx02] , action_mapped[idx02]] = memory.rewards[-1][idx02].squeeze(axis=1) +  self.meta_gamma *self.R[idx02, state_mapped[idx02] , action_mapped[idx02]]
+            self.R[idx02, state_mapped[idx02] , action_mapped[idx02]] = memory.rewards[-1][idx02] +  self.meta_gamma *self.R[idx02, state_mapped[idx02] , action_mapped[idx02]]
         
         if len(idx00) > 0:
             self.nSA[idx00, state_mapped[idx00] , action_mapped[idx00]] += 1
@@ -118,6 +90,6 @@ class RmaxAgent:
 
                 self.Q[idx11[:, 0], idx11[:, 1], idx11[:, 2]] = q
 
-        idx12 = np.argwhere((self.R[np.arange(self.bs), state_mapped, action_mapped] < self.Rmax) & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] >= self.m))
+        idx12 = np.argwhere((self.R[np.arange(self.bs), state_mapped, action_mapped] < 1) & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] >= self.m))
         if len(idx12) > 0:
             self.R[idx12, state_mapped[idx12], action_mapped[idx12]] = -10

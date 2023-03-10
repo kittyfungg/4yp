@@ -42,23 +42,23 @@ def Boltzmann(arr):
     return np.reshape(action_value, (bs,1))
 
 
-# In[2]:
+# In[50]:
 
 
 bs = 2
 inner_gamma = 0         #inner game discount factor, 0 since it's a one shot game
-meta_gamma = 0.9          #meta game discount factor
+meta_gamma = 0.8          #meta game discount factor
 meta_alpha = 0.4          #meta game learning rate
 R_max = 1
 rmax_error = 0.5
 meta_epi = 700
-meta_steps = 70
+meta_steps = 50
 
 epsilon = 0.2
-radius = 1              #radius for discretization, assuming radius>1
+radius = 0.5              #radius for discretization, assuming radius>1
 
 
-# In[3]:
+# In[51]:
 
 
 #reward tensor for plotting purposes [bs, episode, step, agents]
@@ -72,7 +72,7 @@ memory = Memory()
 rmax = RmaxAgent(R_max, bs, meta_steps, meta_gamma, inner_gamma, radius, epsilon, rmax_error)
 
 
-# In[4]:
+# In[ ]:
 
 
 for episode in tqdm(range(meta_epi)): #for each meta-episode
@@ -161,15 +161,41 @@ figure0.set_size_inches(10, 8)
 plt.savefig('histogram at' + str(datetime.now()) + '.png')
 
 
-# In[25]:
+# In[28]:
+
+
+# #checks the unvisited states
+# import sys
+# import numpy
+# numpy.set_printoptions(threshold=sys.maxsize)
+# rmax.nSA[0]
+# arr=[]
+# for i in range(560):
+#     if all(rmax.nSA[0,i])==0:
+#         arr.append(i)
+#         print(i)
+        
+# haha = len(arr)
+# Q_size = 4
+# reconstruct = np.zeros((haha, Q_size))
+# index=arr
+# divv = [280,140,70,1]
+# for i in range(Q_size-1):
+#     qi, modi = np.divmod(index, divv[i])
+#     reconstruct[:, i] = qi*radius
+#     index=modi
+# reconstruct[:,3] = modi     
+
+
+# In[17]:
 
 
 #generate reward mean per step of batch 0
 plot_rew_mean = np.mean(plot_rew[:,:,:,0], axis=1)
 fig_handle = plt.plot(plot_rew_mean)
 #reward at batch 0 only
-plt.xlabel("episodes \n Average reward of our agent: " + str(np.round(np.mean(plot_rew[:,:,:,0]))) + 
-          "\n Average reward of another agent: " + str(np.round(np.mean(plot_rew[:,:,:,1]))))
+plt.xlabel("episodes \n Average reward of our agent: " + str(np.mean(plot_rew[:,:,:,0])) + 
+          "\n Average reward of another agent: " + str(np.mean(plot_rew[:,:,:,1])))
 
 plt.ylabel("Mean rewards")
 
@@ -218,8 +244,7 @@ plt.clf()
 
 # # Interpreting results 
 
-# In[ ]:
-
+# In[3]:
 
 
 # import glob

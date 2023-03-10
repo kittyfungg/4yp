@@ -28,6 +28,7 @@ class RmaxAgent:
         
         self.meta_steps= meta_steps
         self.ns = 2 * 2 * meta_steps
+        #self.ns = 2 * 2 
         self.na = 2
         
         #Q = [bs, meta_state, meta_action], **2 for 2 player  
@@ -42,46 +43,13 @@ class RmaxAgent:
         index = np.zeros(self.bs) #initialise index
         
         if obj == "s":
-            
-            index[:] = (meta[:, 2]//self.radius) + (meta[:, 1]//self.radius)* self.meta_steps + (meta[:, 0]//self.radius)* (2 * self.meta_steps)
+            #index[:] = (meta[:, 1]//self.radius) + (meta[:, 0]//self.radius)* (2)
+            index[:] = meta[:, 2] + meta[:, 1]* self.meta_steps + meta[:, 0] * (2 * self.meta_steps)
 
         if obj == "a":
             index = meta
 
         return index
-                
-    def index_to_table(self, index):
-        #VERY POORLY WRITTEN HARDCODING
-        #returns a table of size [bs, agent_size, num_states, num_actions], given index
-        #agent_size either 1/2, 1 for action table, 2 for state table
-        Q_size = 4
-        reconstruct = np.zeros((self.bs, Q_size))
-        
-        for i in range(Q_size):
-            qi, modi = np.divmod(index, self.poss_combo**(Q_size-i))
-            reconstruct[:, i] = qi*self.radius
-            index=modi
-
-        return np.reshape(reconstruct, (self.bs, self.ns, self.na))
-    
-    def select_action(self, state, epsilon = None):
-        if epsilon == None:
-            epsilon = self.epsilon
-        #set epsilon=-1 if we just want to get the max Q value without epsilon-greedy
-        
-        rand_from_poss_max = np.zeros(self.bs) 
-        if np.random.random() < epsilon:   
-            action = self.index_to_table(np.random.randint(self.na, size=(self.bs)))
-        
-        else:
-            #find maximum action index, given state, makes sure if indices have same Q value, randomise
-
-            lis = self.Q[range(self.bs), self.find_meta_index(state, "s").astype(int), :]
-            for b in range(self.bs):
-                rand_from_poss_max[b] = np.random.choice(np.argwhere(lis[b] == np.max(lis[b])).squeeze())
-                                      
-            action = rand_from_poss_max
-        return action     #returns action index
     
                                 
     def update(self, memory, state, action, next_state):
