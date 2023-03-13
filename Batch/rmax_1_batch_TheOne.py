@@ -13,22 +13,20 @@ class Memory:
         del self.states[:]
         del self.rewards[:]
         
-class RmaxAgentTraj:
-    def __init__(self, R_max, bs, meta_steps, meta_gamma, inner_gamma, radius, epsilon, rmax_error, hist_step):
+class RmaxAgent:
+    def __init__(self, R_max, bs, meta_gamma, inner_gamma, step, epsilon, rmax_error):
         self.bs = bs
         self.meta_gamma = meta_gamma
         self.inner_gamma = inner_gamma
         self.epsilon = epsilon
         self.rmax_error = rmax_error   #rmax_error for discretization error
-        self.radius = radius               #added decimal place for Q & R matrix dimension
+        self.interval = int(1//step + 1)           #number of intervals for reward
 
         self.m = int(math.ceil(math.log(1 / (self.rmax_error * (1-self.meta_gamma))) / (1-self.meta_gamma)))   #calculate m number
         self.Rmax = R_max * self.m
         self.Q0 = round(self.Rmax  / (1 - self.meta_gamma), 2)
-        
-        self.meta_steps= meta_steps
-        self.hist_step = hist_step
-        self.ns = (4**hist_step) * meta_steps
+
+        self.ns = 2 * 2 * self.interval * self.interval
         self.na = 2
         
         #Q = [bs, meta_state, meta_action], **2 for 2 player  
@@ -39,17 +37,33 @@ class RmaxAgentTraj:
     
     def find_meta_index(self, meta, obj):
         #obj can only be "s" / "a"
+        #meta is of size [bs=1028, action_dimension=9]
         index = np.zeros(self.bs) #initialise index
         
         if obj == "s":
-            index[:] = (meta[:, -1]) 
-            for i in range(len(meta[0])-1):
-                index[:] += meta[:, -i-2]* ( (2**i) * self.meta_steps)
-                
+            index = meta[:, 3] + meta[:, 2]* self.interval + meta[:, 1] * (self.interval * self.interval) + meta[:,0] * (2 * self.interval* self.interval)
+            
         if obj == "a":
             index = meta
 
         return index
+    
+    def select_action(self, state):
+        rand_from_poss_max = np.zeros(self.bs) 
+        if np.random.random() < self.epsilon:   
+            action = np.random.randint(self.na, size=(self.bs, ))
+        
+        else:
+            #find maximum action index, given state, makes sure if indices have same Q value, randomise
+            lis = self.Q[range(self.bs), self.find_meta_index(state, "s").astype(int), :]
+            for b in range(self.bs):
+                if len(np.argwhere(lis[b] == np.max(lis[b]))) < 2:   #when there's only 1 max value
+                    rand_from_poss_max[b] = np.argwhere(lis[b] == np.max(lis[b]))
+                else:
+                    rand_from_poss_max[b] = np.random.choice(np.argwhere(lis[b] == np.max(lis[b])).squeeze())
+                                      
+            action = rand_from_poss_max
+        return self.index_to_table(action)     #returns action from action index
                                 
     def update(self, memory, state, action, next_state):
         action_mapped = self.find_meta_index(action, "a").astype(int)
