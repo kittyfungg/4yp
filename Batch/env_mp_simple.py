@@ -227,6 +227,7 @@ class MetaGamesSimplest:
         return observation, r1, done, {"r1": r1, "r2": r2}
     
     
+    
 class MetaGamesTheOne:
     #meta-s = [oppo_act, our_act, our_r, t], meta-a = our_act
     def __init__(self, bs, step):
@@ -239,12 +240,12 @@ class MetaGamesTheOne:
         self.final_oppo_r = 0
         self.final_our_r = 0
         
-        self.choice = np.tile(np.arange(0, 1, step), (self.bs,1))
+        self.choice = np.tile(np.arange(0, 0.5, step), (self.bs,1))
         self.interval = int(1//step + 1)
         self.done = np.zeros((self.bs))
         
     def reset(self):
-        #Initialise action randomly
+        #Initialise action randomly   #0 = WAIT, 1 = JUMP
         self.done = np.zeros((self.bs))
         
         oppo_idx = np.random.randint(len(self.choice), size=self.bs)
@@ -252,11 +253,11 @@ class MetaGamesTheOne:
         our_idx = np.random.randint(len(self.choice), size=self.bs)
         self.our_r = self.choice[np.arange(self.bs), our_idx]
         
-        self.oppo_act = np.random.randint(2, size=(self.bs))    #0 = WAIT, 1 = JUMP
-        self.our_act = np.random.randint(2, size=(self.bs))
+        self.oppo_act = np.zeros((self.bs))
+        self.our_act = np.zeros((self.bs))
         
         self.innerq = np.zeros((self.bs, (2*self.interval), 2))    #our inner q state = oppo_act * our_rew, action = 2
-        self.t = np.ones(self.bs) * -1  #for zero-indexing
+        self.t = np.zeros(self.bs)  #for zero-indexing
         
         return np.stack([self.oppo_act, self.our_act, self.our_r, self.t], axis=1) # OBS: OPPO_ACT, OUR_ACT, OUR_R, T
 
@@ -269,9 +270,9 @@ class MetaGamesTheOne:
             max_idx = self.innerq.reshape(self.innerq.shape[0],-1).argmax(1)
             opponent_action = np.column_stack(np.unravel_index(max_idx, self.innerq[0,:,:].shape))[:,1]
         
-        oppo_idx = np.random.randint(len(self.choice), size=self.bs)
+        oppo_idx = np.random.randint(self.choice[0].shape, size=self.bs)
         oppo_advance = self.choice[np.arange(self.bs), oppo_idx]
-        our_idx = np.random.randint(len(self.choice), size=self.bs)
+        our_idx = np.random.randint(self.choice[0].shape, size=self.bs)
         our_advance = self.choice[np.arange(self.bs), our_idx]
         
         # PLAY GAME, GET REWARDS
@@ -289,7 +290,7 @@ class MetaGamesTheOne:
                     self.oppo_r[i] += oppo_advance[i]
                     self.done[i] = 1                                                         #fking over
 
-
+ 
                 #step for us
                 if (action[i] == 0) and (self.our_r[i] + our_advance[i] > 1):
                     self.our_r[i] = 0
@@ -304,7 +305,7 @@ class MetaGamesTheOne:
         
             #else for this batch it's done, it retains the previous rewards
         self.t += 1
-        self.done = np.logical_or(self.t >= self.interval, self.done)
+        self.done = np.logical_or(self.t >= int(self.interval), self.done)
         
         # GENERATE OBSERVATION
         observation = np.stack([opponent_action, action, self.our_r, self.t], axis=1) 

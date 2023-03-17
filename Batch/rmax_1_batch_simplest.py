@@ -57,39 +57,25 @@ class RmaxAgent:
         state_mapped = self.find_meta_index(state, "s").astype(int)
         next_state_mapped = self.find_meta_index(next_state, "s").astype(int)
         
-        #FOR nSA<m CASE:
-        #filter for nSA<m
-        idx00 = np.argwhere(self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m)
-        
-        #filter for nSA=0
-        idx01 = np.argwhere((self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m) & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] == 0))
-        #filter for 0<nSA<m
-        idx02 = np.argwhere((self.nSA[np.arange(self.bs), state_mapped, action_mapped] < self.m) & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] > 0))
-        
-        if len(idx01) > 0:
-            self.R[idx01, state_mapped[idx01] , action_mapped[idx01]] = memory.rewards[-1][idx01]
-            
-        if len(idx02) > 0:
-            self.R[idx02, state_mapped[idx02] , action_mapped[idx02]] = memory.rewards[-1][idx02] +  self.meta_gamma *self.R[idx02, state_mapped[idx02] , action_mapped[idx02]]
-        
-        if len(idx00) > 0:
-            self.nSA[idx00, state_mapped[idx00] , action_mapped[idx00]] += 1
-            self.nSAS[idx00, state_mapped[idx00] , action_mapped[idx00], next_state_mapped[idx00]] +=1
-                   
-        #FOR nSA>=m CASE:
-        idx10 = np.argwhere(self.nSA[np.arange(self.bs), state_mapped, action_mapped] >= self.m)
-        for i in range(self.m):
+        for i in range(self.bs):
+            if self.nSA[i, state_mapped[i], action_mapped[i]] <= self.m:
+                self.nSA[range(self.bs), state_mapped , action_mapped] += 1
+                self.nSAS[range(self.bs), state_mapped , action_mapped, next_state_mapped] +=1
+                self.R[i, state_mapped[i], action_mapped[i]] = memory.rewards[-1][i] + self.meta_gamma *self.R[i, state_mapped[i], action_mapped[i]]
+                
+            if self.nSA[i, state_mapped[i], action_mapped[i]] == self.m:
+                for m in range(self.m):
+                    for s in range(self.ns):
+                        for a in range(self.na):
+                            if self.nSA[i, s, a] >= self.m:
+                                q = self.R[i, s, a]/ self.nSA[i,s,a]
 
-            idx11 = np.argwhere(self.nSA[:,:,:] >= self.m)
-            if len(idx11) > 0:
-                q = self.R[idx11[:, 0], idx11[:, 1], idx11[:, 2]]/ self.nSA[idx11[:, 0], idx11[:, 1], idx11[:, 2]]
-
-                for next_s in range(self.ns):
-                    transition = self.nSAS[idx11[:, 0], idx11[:, 1], idx11[:, 2], next_s] / self.nSA[idx11[:, 0], idx11[:, 1], idx11[:, 2]]
-                    q += transition * np.amax(self.Q[idx11[:,0], next_s, :], axis=1)
-
-                self.Q[idx11[:, 0], idx11[:, 1], idx11[:, 2]] = q
-
-        idx12 = np.argwhere((self.R[np.arange(self.bs), state_mapped, action_mapped] < 1) & (self.nSA[np.arange(self.bs), state_mapped, action_mapped] >= self.m))
-        if len(idx12) > 0:
-            self.R[idx12, state_mapped[idx12], action_mapped[idx12]] = -10
+                                for next_s in range(self.ns):
+                                    transition = self.nSAS[i, s, a, next_s]/ self.nSA[i, s, a]
+                                    #q += transition * np.max(self.Q[i, next_s, :])
+                                    masked_arr = np.ma.masked_where(self.Q[i, next_s] == self.Q0, self.Q[i, next_s])
+                                    if masked_arr.mask.all():     #for the first time when everything is still Q0
+                                        q += 0
+                                    else:
+                                        q += self.meta_gamma * transition * np.ma.masked_where(self.Q[i, next_s] == self.Q0, self.Q[i, next_s]).max()
+                                self.Q[i, s, a] = q

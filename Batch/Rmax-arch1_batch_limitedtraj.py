@@ -12,7 +12,6 @@ from datetime import datetime
 from collections import Counter
 
 
-
 import gym
 from gym.spaces import Discrete, Tuple
 
@@ -38,7 +37,7 @@ meta_gamma = 0         #meta game discount factor
 meta_alpha = 0.4          #meta game learning rate
 R_max = 1
 rmax_error = 0.5
-meta_epi = 15000
+meta_epi = 30000
 meta_steps = 30
 
 game = "MP"
@@ -61,7 +60,6 @@ for episode in range(meta_epi) : #for each meta-episode
     #reset environment 
     #initialise meta-state and meta-action randomly
     meta_s = env.reset()
-    memory.states.append(meta_s)
    
     for step in range(meta_steps):    #for each meta time step
         #--------------------------------------START OF INNER GAME--------------------------------------  
@@ -81,11 +79,9 @@ for episode in range(meta_epi) : #for each meta-episode
 
         #meta-action = action that corresponds to max Q(meta_s) = our inner Q
         meta_a = our_action
-        memory.actions.append(meta_a) 
 
         #meta-state = discretized inner game Q table of all agents
         new_meta_s = obs
-        memory.states.append(new_meta_s)    
 
         #meta-reward = sum of rewards of our agent in inner game of K episodes & T timesteps
         our_REW = reward               
@@ -99,7 +95,7 @@ for episode in range(meta_epi) : #for each meta-episode
 
 
 # # Plots
-
+plt.clf()
 #generate histogram
 visit_dict = {}
 for i in range(len(rmax.nSA[0].flatten().tolist())):
@@ -110,92 +106,76 @@ plt.bar(histogram_dict.keys(), histogram_dict.values(), 0.5, color='g')
 plt.xlabel("visitation counts: " + str(histogram_dict), fontsize=12)
 figure0 = plt.gcf()
 figure0.set_size_inches(10, 8)
-figure0.savefig('histogram at' + str(datetime.now()) + '.png')
+figure0.savefig(game + 'histogram at' + str(datetime.now()) + '.png')
 
 plt.clf()
 #generate reward mean per step of all batches
 plot_rew_mean = np.mean(plot_rew[0,:,:,0], axis=1)
 fig_handle = plt.plot(plot_rew_mean)
-#reward of all batches
+
 plt.xlabel("episodes \n Average reward of our agent: " + str(np.mean(plot_rew[0,:,:,0])) + 
           "\n Average reward of another agent: " + str(np.mean(plot_rew[0,:,:,1])))
-
 plt.ylabel("Mean rewards")
 
 figure1 = plt.gcf() # get current figure
 figure1.set_size_inches(10, 8)
 
-figure1.savefig('inner_gamma' + str(inner_gamma) + '_rad' + str(radius) + '_' + str(meta_epi) + '_' + str(meta_steps) + '_mp1.png'  , dpi = 100)
-
+figure1.savefig(game + 'hist' + str(hist_step) + '_epi' + str(meta_epi) + '_step' + str(meta_steps) + '_mp1.png'  , dpi = 100)
 
 plt.clf()
-#generate learning curve at start of batch 0
+#generate reward of first episode
 plot_rew_epi_start = plot_rew[0, 1, :, 0]
 fig_handle = plt.plot(plot_rew_epi_start)
 
 plt.xlabel("steps")
-
 plt.ylabel("Reward for first episode, all timesteps")
 
 figure2 = plt.gcf() # get current figure
 figure2.set_size_inches(10, 8)
 
-figure2.savefig('inner_gamma' + str(inner_gamma) + '_rad' + str(radius) + '_' + str(meta_epi) + '_' + str(meta_steps) + '_first_epi_mp1.png' , dpi = 100)
+figure2.savefig(game + 'hist' + str(hist_step)  + '_epi' + str(meta_epi) + '_step' + str(meta_steps) + '_first_epi.png' , dpi = 100)
 
 plt.clf()
-#generate learning curve at end of batch 0
+#generate reward of last episode
 plot_rew_epi_start = plot_rew[0, -1, :, 0]
 fig_handle = plt.plot(plot_rew_epi_start)
 
 plt.xlabel("steps")
-
 plt.ylabel("Reward for last episode, all timesteps")
-
-figure2 = plt.gcf() # get current figure
-figure2.set_size_inches(10, 8)
-
-figure2.savefig('inner_gamma' + str(inner_gamma) + '_rad' + str(radius) + '_' + str(meta_epi) + '_' + str(meta_steps) + '_first_epi_mp1.png' , dpi = 100)
-
-plt.clf()
-#generate learning curve at start of batch 0
-plot_rew_epi_start = np.mean(plot_rew[0, :int(meta_epi*0.1), :, 0], axis=0)
-fig_handle = plt.plot(plot_rew_epi_start)
-
-plt.xlabel("steps")
-
-plt.ylabel("Average learning rate of first " + str(int(meta_epi*0.1)) + " episodes")
 
 figure3 = plt.gcf() # get current figure
 figure3.set_size_inches(10, 8)
 
-figure3.savefig('inner_gamma' + str(inner_gamma) + '_rad' + str(radius) + '_' + str(meta_epi) + '_' + str(meta_steps) + '_last_epi_mp1.png' , dpi = 100)
-
+figure3.savefig(game + 'hist' + str(hist_step)  + '_epi' + str(meta_epi) + '_step' + str(meta_steps) + '_last_epi.png' , dpi = 100)
 
 plt.clf()
-#generate learning curve at end
-plot_rew_epi_end = np.mean(plot_rew[0, -int(meta_epi*0.1):, :, 0], axis=0)
-fig_handle = plt.plot(plot_rew_epi_end)
+#generate learning curve of first 10
+plot_rew_epi_start = np.mean(plot_rew[0, :10, :, 0], axis=0)
+fig_handle = plt.plot(plot_rew_epi_start)
 
-plt.xlabel("steps")
+plt.xlabel("steps" + "\n Average reward of first 10 episodes" + str(np.mean(plot_rew[0,:10,:,0])))
 
-plt.ylabel("Average learning rate of last " + str(int(meta_epi*0.1)) + " episodes")
+plt.ylabel("Average learning rate of first 10 episodes")
 
 figure4 = plt.gcf() # get current figure
 figure4.set_size_inches(10, 8)
 
-figure4.savefig('inner_gamma' + str(inner_gamma) + '_rad' + str(radius) + '_' + str(meta_epi) + '_' + str(meta_steps) + '_last_epi_mp1.png' , dpi = 100)
+figure4.savefig(game + 'hist' + str(hist_step) + '_epi' + str(meta_epi) + '_step' + str(meta_steps) + '_first10_epi_lr.png' , dpi = 100)
 
 
-# Open a file and use dump()
-with open('plot_rew' + str(datetime.now()) + '.pkl', 'wb') as file:
-      
-    # A new file will be created
-    pickle.dump(plot_rew, file)
+plt.clf()
+#generate learning curve of last 10
+plot_rew_epi_end = np.mean(plot_rew[0, -10:, :, 0], axis=0)
+fig_handle = plt.plot(plot_rew_epi_end)
 
-# Open a file and use dump()
-with open('rmax_nSA' + str(datetime.now()) + '.pkl', 'wb') as file:
-      
-    # A new file will be created
-    pickle.dump(rmax.nSA, file)
+plt.xlabel("steps" + "\n Average reward of last 10 episodes" + str(np.mean(plot_rew[0,-10:,:,0])))
+plt.ylabel("Average learning rate of last 10 episodes")
+
+figure5 = plt.gcf() # get current figure
+figure5.set_size_inches(10, 8)
+
+figure5.savefig(game + 'hist' + str(hist_step)  + '_epi' + str(meta_epi) + '_step' + str(meta_steps) + '_last_epi10_lr.png' , dpi = 100)
+
+
 
 
