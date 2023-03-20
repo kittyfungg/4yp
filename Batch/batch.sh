@@ -3,6 +3,6 @@
 #SBATCH --time=20:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=kitty.fung@magd.ox.ac.uk
-python3 Rmax-arch1_batch_simple.py
+python3 Rmax-arch1_batch_limitedtraj.py
 
 
